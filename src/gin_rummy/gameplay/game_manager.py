@@ -2,9 +2,9 @@ import numpy as np
 
 from random import shuffle, randint
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import Tuple
 from numpy.typing import ArrayLike
-from scipy import ndimage
+from scipy.signal import convolve2d
 
 
 NS = 4
@@ -30,10 +30,10 @@ class CardFormatter:
 
 
 class BasePlayer(ABC):
-    straight_kernel = np.arange(4, 0, -1).reshape((1, -1))
-
     def __init__(self):
         self.hand_matrix = np.zeros((NS, NV), dtype=bool)
+        self.straight_kernel = np.arange(1, 8).reshape((1, -1))
+        self.straight_kernel[0,4:] = 0  # for evaluation
 
     def accept_card(self, card: int):
         self.hand_matrix[card // NV, card % NV] = True
@@ -43,11 +43,10 @@ class BasePlayer(ABC):
         pass
 
     def _get_straight_scores(self) -> ArrayLike:
-        return ndimage.convolve(
+        return convolve2d(
             self.hand_matrix,
             self.straight_kernel,
-            mode="constant",
-            cval=0.0
+            mode="same",
         )
 
     def check_for_victory(self) -> bool:
@@ -73,18 +72,18 @@ class BasePlayer(ABC):
         # Remove 4 of a kind, check if straight still there, replace
         for _idx in k4_idx:
             self.hand_matrix[:, _idx] = False
-            if (self._get_straight_scores() == 9).any():
-                return True
+            win = (self._get_straight_scores() == 9).any()
             self.hand_matrix[:, _idx] = True
+            if win:
+                return True
 
         # Remove each straight, check
         for i, j in zip(s4_row_idx, s4_col_idx):
             self.hand_matrix[i, j:j+4] = False
-            if (self.hand_matrix.sum(axis=0) == 3).any():
-                return True
-            if (self._get_straight_scores() == 9).any():
-                return True
+            win = (self.hand_matrix.sum(axis=0) == 3).any() or (self._get_straight_scores() == 9).any()
             self.hand_matrix[i, j:j+4] = True
+            if win:
+                return True
 
         return False
 
@@ -161,4 +160,4 @@ class GameManager:
 
         print(f"Game concluded! Player {turn + 1} wins!")
         for idx in [turn, 1 - turn]:
-            print(f">> Player {idx} hand: {players[idx].get_hand(human=True)}")
+            print(f">> Player {idx + 1} hand: {players[idx].get_hand(human=True)}")
