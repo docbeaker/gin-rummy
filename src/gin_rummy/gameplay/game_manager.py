@@ -134,7 +134,7 @@ class GameManager:
         # If model wants to discard the discard, have it take top of deck instead
         discard_top = self.discard_pile[-1]
         player.accept_card(self.discard_pile.pop())
-        discard_card, _ = player.discard_card()
+        discard_card, _ = player.discard_card()  # TODO: include state
         if discard_card == discard_top:
             self.discard_pile.append(discard_card)  # put that card back and try again
             player.accept_card(self.deck.pop())
