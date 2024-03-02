@@ -155,7 +155,11 @@ class GameManager:
         turn = 1 - turn  # swap the turn initially, as we always swap before play
         while not end_of_game:
             turn = 1 - turn  # swap the turn
-            print(f"{player_1.get_hand(human=True)}\t{player_2.get_hand(human=True)}\t{self.discard_pile}")
+            print(
+                f"{player_1.get_hand(human=True)}\t"
+                f"{player_2.get_hand(human=True)}\t"
+                f"Discard: {CardFormatter.to_card(self.discard_pile[-1])}"
+            )
             end_of_game = self.process_play(players[turn])  # play the turn
 
         print(f"Game concluded! Player {turn + 1} wins!")
