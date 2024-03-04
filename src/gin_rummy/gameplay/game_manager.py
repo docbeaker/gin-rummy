@@ -160,6 +160,7 @@ class GameManager:
         if not self.deck:
             self.deck = self.discard_pile
             self.shuffle()
+            self.discard_pile.append(self.deck.pop())
 
         # If model wants to discard the discard, have it take top of deck instead
         state = player.compute_state(self)
