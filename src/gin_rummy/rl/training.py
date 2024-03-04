@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from time import time
+from pathlib import Path
 
 from typing import List, Union
 
@@ -8,11 +9,28 @@ from gin_rummy.gameplay.game_manager import BasePlayer
 from gin_rummy.gameplay.playouts import run_playouts
 
 
+def save_checkpoint(
+    output: Path,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    **kwargs
+):
+    state = {
+        "optimizer": optimizer.state_dict(),
+        "model": model.state_dict(),
+    }
+    for k, v in kwargs.items():
+        state[k] = v
+    torch.save(state, output)
+
+
 def train_agent(
     n_epochs: int,
     n_games: int,
     player: BasePlayer,
     opponent_pool: Union[List[BasePlayer], BasePlayer],
+    output: Path = None,
+    always_save_checkpoint: bool = False
 ) -> BasePlayer:
     assert hasattr(player, "model"), "player must be using a model for training!"
     optimizer = torch.optim.Adam(
@@ -20,6 +38,10 @@ def train_agent(
         lr=1E-1
     )
 
+    output.parent.mkdir(exist_ok=True, parents=True)
+
+    win_rates = []
+    best_win_rate = 0.0
     for e in range(n_epochs + 1):
         st = time()
         player.initialize_dataset()
@@ -31,6 +53,15 @@ def train_agent(
             f"Epoch {e}: agent win percentage = {100 * n_wins / n_played: .1f}% "
             f"({n_played} valid games)"
         )
+
+        # Check if we should be saving a model
+        wr = n_wins / n_played
+        win_rates.append(wr)
+        if e and ((wr > best_win_rate) or always_save_checkpoint):
+            save_checkpoint(output, player.model, optimizer, win_rates=win_rates)
+            print("Model checkpoint saved!")
+        best_win_rate = max(wr, best_win_rate)
+
         if e == n_epochs:
             break
 
@@ -38,7 +69,7 @@ def train_agent(
             player.dataset,
             batch_size=len(player.dataset),
             shuffle=True,
-            num_workers=4
+            num_workers=8
         )
 
         # Basic REINFORCE algorithm to start

@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     agent = train_agent(
         10,
-        64,
+        500,
         agent,
         CardPointPlayer(),
     )
