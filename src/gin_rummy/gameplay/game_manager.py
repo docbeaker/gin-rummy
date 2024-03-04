@@ -21,12 +21,35 @@ class CardFormatter:
     _suits = [
         chr(x) for x in [9827, 9830, 9829, 9824][:NS]
     ]
+    _suits_char = {
+        s: i for i, s in enumerate(["C", "D", "H", "S"])
+    }
+    _val_map = {
+        k: i for i, k in _card_map.items()
+    }
 
     @classmethod
     def to_card(cls, suit_idx: int, value_idx: int = None) -> str:
         if value_idx is None:
             suit_idx, value_idx = suit_idx // NV, suit_idx % NV
         return f"{cls._card_map.get(value_idx, value_idx + 1)}{cls._suits[suit_idx]}"
+
+    @classmethod
+    def to_index(cls, card: str) -> int:
+        _suit_idx = cls._suits_char.get(card[-1], len(cls._suits_char))
+        if card[:-1] in cls._val_map:
+            _val_idx = cls._val_map[card[:-1]]
+        else:
+            try:
+                _val_idx = int(card[:-1]) - 1
+            except ValueError:
+                _val_idx = -1
+        if _val_idx < 0 or _val_idx > 12:
+            _val_idx = NS * NV
+        _idx = _suit_idx * NV + _val_idx
+        if _idx < 0 or _idx >= NV * NS:
+            return -1
+        return _idx
 
 
 class BasePlayer(ABC):
@@ -35,11 +58,18 @@ class BasePlayer(ABC):
         self.straight_kernel = np.arange(1, 8).reshape((1, -1))
         self.straight_kernel[0,4:] = 0  # for evaluation
 
+    @property
+    def requires_input(self):
+        return False
+
     def accept_card(self, card: int):
         self.hand_matrix[card // NV, card % NV] = True
 
+    def compute_state(self, game: "GameManager"):
+        return None
+
     @abstractmethod
-    def _choose_card_to_discard(self) -> int:
+    def _choose_card_to_discard(self, state) -> int:
         pass
 
     def _get_straight_scores(self) -> ArrayLike:
@@ -87,11 +117,11 @@ class BasePlayer(ABC):
 
         return False
 
-    def discard_card(self) -> Tuple[int, bool]:
+    def discard_card(self, state) -> Tuple[int, bool]:
         """
         Return a tuple of card to add to discard pile and bool indicating whether gin
         """
-        discard_card = self._choose_card_to_discard()
+        discard_card = self._choose_card_to_discard(state)
         self.hand_matrix[discard_card // NV, discard_card % NV] = False
         return discard_card, self.check_for_victory()
 
@@ -132,34 +162,55 @@ class GameManager:
             self.shuffle()
 
         # If model wants to discard the discard, have it take top of deck instead
+        state = player.compute_state(self)
         discard_top = self.discard_pile[-1]
         player.accept_card(self.discard_pile.pop())
-        discard_card, _ = player.discard_card()  # TODO: include state
+        discard_card, gin = player.discard_card(state)
         if discard_card == discard_top:
+            assert not gin, "should not be declaring gin when returning discard card!"
             self.discard_pile.append(discard_card)  # put that card back and try again
             player.accept_card(self.deck.pop())
-            discard_card, gin = player.discard_card()
-            if gin:
-                return True
+            discard_card, gin = player.discard_card(state)
         self.discard_pile.append(discard_card)
-        return False
+        return gin
 
-    def play_game(self, player_1: BasePlayer, player_2: BasePlayer, turn: int = None):
+    def print_obfuscated(self, player: BasePlayer):
+        print(
+            f"Player hand: {player.get_hand(human=True):<30}"
+            f"Discard: {CardFormatter.to_card(self.discard_pile[-1])}"
+        )
+
+    def print_full(self, player_1: BasePlayer, player_2: BasePlayer):
+        print(
+            f"{player_1.get_hand(human=True)}\t"
+            f"{player_2.get_hand(human=True)}\t"
+            f"Discard: {CardFormatter.to_card(self.discard_pile[-1])}"
+        )
+
+    def play_game(
+        self,
+        player_1: BasePlayer,
+        player_2: BasePlayer,
+        turn: int = None,
+        verbose: bool = False,
+    ):
         self.deal(player_1, player_2)
 
         if turn is None:
             turn = randint(0, 1)
         players = [player_1, player_2]
 
+        # Do not print if a human is playing
+        verbose = verbose and not (player_1.requires_input or player_2.requires_input)
+
         end_of_game = False
         turn = 1 - turn  # swap the turn initially, as we always swap before play
         while not end_of_game:
             turn = 1 - turn  # swap the turn
-            print(
-                f"{player_1.get_hand(human=True)}\t"
-                f"{player_2.get_hand(human=True)}\t"
-                f"Discard: {CardFormatter.to_card(self.discard_pile[-1])}"
-            )
+            if verbose:
+                self.print_full(*players)
+            if players[turn].requires_input:
+                self.print_obfuscated(players[turn])
             end_of_game = self.process_play(players[turn])  # play the turn
 
         print(f"Game concluded! Player {turn + 1} wins!")

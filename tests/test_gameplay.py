@@ -3,8 +3,8 @@ from numpy.random import choice
 from gin_rummy.gameplay.game_manager import BasePlayer, NV
 
 
-class TestPlayer(BasePlayer):
-    def _choose_card_to_discard(self) -> int:
+class RandomPlayer(BasePlayer):
+    def _choose_card_to_discard(self, state) -> int:
         sidx, vidx = where(self.hand_matrix)
         card_idx = choice(len(sidx))
         return NV * sidx[card_idx] + vidx[card_idx]
@@ -24,7 +24,7 @@ class TestWinConditions:
         }
 
         for _combo_name, _combo in combos.items():
-            player = TestPlayer()
+            player = RandomPlayer()
             for c in _combo:
                 player.accept_card(c)
             assert player.hand_matrix.sum() == 7, "wrong number of cards"
@@ -37,7 +37,7 @@ class TestWinConditions:
         }
 
         for _combo_name, _combo in combos.items():
-            player = TestPlayer()
+            player = RandomPlayer()
             for c in _combo:
                 player.accept_card(c)
             assert player.hand_matrix.sum() == 7, "wrong number of cards"
