@@ -6,6 +6,7 @@ from torch import nn, Tensor, no_grad
 from torch.distributions import Categorical
 
 from ..gameplay.game_manager import BasePlayer
+from ..rl.recorder import GameplayDataset
 
 
 class CardPointPlayer(BasePlayer):
@@ -44,10 +45,10 @@ class PointsFilterNN(nn.Module):
                 np.expand_dims(init_kernel, (0, 1))
             )
 
-    def forward(self, hand_matrix: Tensor):
-        B, ns, nv = hand_matrix.size()
-        x = -self.c2d(hand_matrix)
-        x = x.masked_fill(hand_matrix == 0, float("-inf")).view(B, ns * nv)
+    def forward(self, state: Tensor):
+        B, ns, nv = state.size()
+        x = -self.c2d(state.unsqueeze(1)).squeeze()  # put in one channel
+        x = x.masked_fill(state == 0, float("-inf")).view(B, ns * nv)
         return self.activation(x)
 
 
@@ -59,8 +60,11 @@ class CardPointNNPlayer(CardPointPlayer):
         )
 
     def _choose_card_to_discard(self, state) -> int:
-        hm_tensor = Tensor(self.hand_matrix).unsqueeze(0)
+        hm_tensor = Tensor(self.hand_matrix)
         with no_grad():
-            logits = self.model(hm_tensor)
+            logits = self.model(hm_tensor.unsqueeze(0))  # No batch here, so make a batch dimension
         m = Categorical(nn.functional.softmax(logits.squeeze(), dim=-1))
-        return int(m.sample())
+        a_idx = int(m.sample())
+        if self.dataset is not None:
+            self.dataset.append(hm_tensor, a_idx)
+        return a_idx

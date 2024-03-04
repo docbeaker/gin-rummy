@@ -6,6 +6,8 @@ from typing import Tuple
 from numpy.typing import ArrayLike
 from scipy.signal import convolve2d
 
+from gin_rummy.rl.recorder import GameplayDataset
+
 
 NS = 4
 NV = 13
@@ -56,11 +58,18 @@ class BasePlayer(ABC):
     def __init__(self):
         self.hand_matrix = np.zeros((NS, NV), dtype=bool)
         self.straight_kernel = np.arange(1, 8).reshape((1, -1))
-        self.straight_kernel[0,4:] = 0  # for evaluation
+        self.straight_kernel[0, 4:] = 0  # for evaluation
+        self.dataset = None
 
     @property
     def requires_input(self):
         return False
+
+    def initialize_dataset(self):
+        self.dataset = GameplayDataset()
+
+    def clear_hand(self):
+        self.hand_matrix[:, :] = False
 
     def accept_card(self, card: int):
         self.hand_matrix[card // NV, card % NV] = True
@@ -125,7 +134,7 @@ class BasePlayer(ABC):
         self.hand_matrix[discard_card // NV, discard_card % NV] = False
         return discard_card, self.check_for_victory()
 
-    def get_hand(self, human: bool=False):
+    def get_hand(self, human: bool = False):
         """
         TODO: organize into groups using winning combos?
         """
@@ -138,16 +147,22 @@ class BasePlayer(ABC):
 class GameManager:
     HAND_SIZE = 7
 
-    def __init__(self):
-        self.deck, self.discard_pile = list(range(NS * NV)), None
-        self.shuffle()
+    def __init__(self, max_reshuffles: int = 0):
+        self.max_reshuffles = max_reshuffles
+        self.deck, self.discard_pile = [], []
+        self.reshuffles = 0
+        self.reset()
 
-    def shuffle(self):
+    def reset(self):
+        self.deck = list(range(NS * NV))
         shuffle(self.deck)
         self.discard_pile = []
+        self.reshuffles = 0
 
     def deal(self, player_1: BasePlayer, player_2: BasePlayer):
-        assert not self.discard_pile, "trying to deal when discard pile exists!"
+        self.reset()
+        player_1.clear_hand()
+        player_2.clear_hand()
         for _ in range(self.HAND_SIZE):
             for player_ in [player_1, player_2]:
                 player_.accept_card(self.deck.pop())
@@ -159,8 +174,12 @@ class GameManager:
         """
         if not self.deck:
             self.deck = self.discard_pile
-            self.shuffle()
+            self.discard_pile = []
+            shuffle(self.deck)
             self.discard_pile.append(self.deck.pop())
+            self.reshuffles += 1
+            if self.reshuffles > self.max_reshuffles:
+                return True
 
         # If model wants to discard the discard, have it take top of deck instead
         state = player.compute_state(self)
@@ -193,8 +212,13 @@ class GameManager:
         player_1: BasePlayer,
         player_2: BasePlayer,
         turn: int = None,
-        verbose: bool = False,
-    ):
+        verbose: int = 0,
+    ) -> int:
+        """
+        Return the index of the winning player
+
+        Verbosity: 0 = nothing, 1 = conclusion only, 2 = everything
+        """
         self.deal(player_1, player_2)
 
         if turn is None:
@@ -202,18 +226,27 @@ class GameManager:
         players = [player_1, player_2]
 
         # Do not print if a human is playing
-        verbose = verbose and not (player_1.requires_input or player_2.requires_input)
+        humans_playing = player_1.requires_input or player_2.requires_input
 
         end_of_game = False
         turn = 1 - turn  # swap the turn initially, as we always swap before play
         while not end_of_game:
             turn = 1 - turn  # swap the turn
-            if verbose:
-                self.print_full(*players)
             if players[turn].requires_input:
                 self.print_obfuscated(players[turn])
+            elif (verbose == 2) and not humans_playing:
+                self.print_full(*players)
             end_of_game = self.process_play(players[turn])  # play the turn
 
-        print(f"Game concluded! Player {turn + 1} wins!")
-        for idx in [turn, 1 - turn]:
-            print(f">> Player {idx + 1} hand: {players[idx].get_hand(human=True)}")
+        if self.reshuffles > self.max_reshuffles:
+            turn = -1  # It's a draw
+
+        if verbose:
+            if turn < 0:
+                print("It's a draw!")
+            else:
+                print(f"Game concluded! Player {turn + 1} wins!")
+            for idx in [turn, 1 - turn]:
+                print(f">> Player {idx + 1} hand: {players[idx].get_hand(human=True)}")
+
+        return turn
