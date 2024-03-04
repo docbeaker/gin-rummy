@@ -77,6 +77,10 @@ class BasePlayer(ABC):
     def compute_state(self, game: "GameManager"):
         return None
 
+    def set_temperature(self, temperature: float):
+        if hasattr(self, "model"):
+            self.model.t = temperature
+
     @abstractmethod
     def _choose_card_to_discard(self, state) -> int:
         pass

@@ -34,11 +34,12 @@ class CardPointPlayer(BasePlayer):
 
 
 class PointsFilterNN(nn.Module):
-    def __init__(self, init_kernel: ArrayLike=None):
+    def __init__(self, temperature: float=1.0, init_kernel: ArrayLike=None):
         super().__init__()
         self.c2d = nn.Conv2d(
             1, 1, (7, 7), padding="same", bias=False
         )
+        self.t = temperature
         self.activation = nn.LogSoftmax(dim=-1)
         if init_kernel is not None:
             self.c2d.weight.data = Tensor(
@@ -49,7 +50,7 @@ class PointsFilterNN(nn.Module):
         B, ns, nv = state.size()
         x = -self.c2d(state.unsqueeze(1)).squeeze()  # put in one channel
         x = x.masked_fill(state == 0, float("-inf")).view(B, ns * nv)
-        return self.activation(x)
+        return self.activation(x / self.t)
 
 
 class CardPointNNPlayer(CardPointPlayer):
