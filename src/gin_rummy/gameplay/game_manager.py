@@ -166,12 +166,12 @@ class GameManager:
         self.discard_pile = []
         self.reshuffles = 0
 
-    def deal(self, player_1: BasePlayer, player_2: BasePlayer):
+    def deal(self, player_0: BasePlayer, player_1: BasePlayer):
         self.reset()
+        player_0.clear_hand()
         player_1.clear_hand()
-        player_2.clear_hand()
         for _ in range(self.HAND_SIZE):
-            for player_ in [player_1, player_2]:
+            for player_ in [player_0, player_1]:
                 player_.accept_card(self.deck.pop())
         self.discard_pile.append(self.deck.pop())
 
@@ -215,17 +215,17 @@ class GameManager:
             f"Discard: {CardFormatter.to_card(self.discard_pile[-1])}"
         )
 
-    def print_full(self, player_1: BasePlayer, player_2: BasePlayer):
+    def print_full(self, player_0: BasePlayer, player_1: BasePlayer):
         print(
+            f"{player_0.get_hand(human=True)}\t"
             f"{player_1.get_hand(human=True)}\t"
-            f"{player_2.get_hand(human=True)}\t"
             f"Discard: {CardFormatter.to_card(self.discard_pile[-1])}"
         )
 
     def play_game(
         self,
+        player_0: BasePlayer,
         player_1: BasePlayer,
-        player_2: BasePlayer,
         turn: int = None,
         verbose: int = 0,
     ) -> int:
@@ -237,12 +237,12 @@ class GameManager:
         If a human is playing, print the hand of that player only,
         as well as the summary of each play
         """
-        humans_playing = player_1.requires_input or player_2.requires_input
-        self.deal(player_1, player_2)
+        humans_playing = player_0.requires_input or player_1.requires_input
+        self.deal(player_0, player_1)
 
         if turn is None:
             turn = randint(0, 1)
-        players = [player_1, player_2]
+        players = [player_0, player_1]
 
         end_of_game = False
         turn = 1 - turn  # swap the turn initially, as we always swap before play
@@ -266,8 +266,8 @@ class GameManager:
             if turn < 0:
                 print("It's a draw!")
             else:
-                print(f"Game concluded! Player {turn + 1} wins!")
+                print(f"Game concluded! Player {turn} wins!")
             for idx in [turn, 1 - turn]:
-                print(f">> Player {idx + 1} hand: {players[idx].get_hand(human=True)}")
+                print(f">> Player {idx} hand: {players[idx].get_hand(human=True)}")
 
         return turn
