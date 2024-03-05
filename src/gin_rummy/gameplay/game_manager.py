@@ -2,7 +2,7 @@ import numpy as np
 
 from random import shuffle, randint
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Tuple, Union
 from numpy.typing import ArrayLike
 from scipy.signal import convolve2d
 
@@ -71,7 +71,10 @@ class BasePlayer(ABC):
     def clear_hand(self):
         self.hand_matrix[:, :] = False
 
-    def accept_card(self, card: int):
+    def accept_card(self, card: Union[int, str]):
+        if isinstance(card, str):
+            card = CardFormatter.to_index(card)
+            assert card >= 0, "player tried to accept invalid card"
         self.hand_matrix[card // NV, card % NV] = True
 
     def compute_state(self, game: "GameManager"):
@@ -172,7 +175,7 @@ class GameManager:
                 player_.accept_card(self.deck.pop())
         self.discard_pile.append(self.deck.pop())
 
-    def process_play(self, player: BasePlayer) -> bool:
+    def process_play(self, player: BasePlayer, idx: int, verbose: bool = False) -> bool:
         """
         Return whether it is the end of the game
         """
@@ -190,11 +193,19 @@ class GameManager:
         discard_top = self.discard_pile[-1]
         player.accept_card(self.discard_pile.pop())
         discard_card, gin = player.discard_card(state)
-        if discard_card == discard_top:
-            assert not gin, "should not be declaring gin when returning discard card!"
+        # Note weird edge case: can be dealt gin, in which case correct strategy is
+        # to take discard card and then use it to gin
+        if (discard_card == discard_top) and not gin:
             self.discard_pile.append(discard_card)  # put that card back and try again
             player.accept_card(self.deck.pop())
             discard_card, gin = player.discard_card(state)
+            if verbose:
+                print(f"Player {idx} draws from deck and discards {CardFormatter.to_card(discard_card)}")
+        else:
+            print(
+                f"Player {idx} takes {CardFormatter.to_card(discard_top)} "
+                f"and discards {CardFormatter.to_card(discard_card)}"
+            )
         self.discard_pile.append(discard_card)
         return gin
 
@@ -222,30 +233,36 @@ class GameManager:
         Return the index of the winning player
 
         Verbosity: 0 = nothing, 1 = conclusion only, 2 = everything
+
+        If a human is playing, print the hand of that player only,
+        as well as the summary of each play
         """
+        humans_playing = player_1.requires_input or player_2.requires_input
         self.deal(player_1, player_2)
 
         if turn is None:
             turn = randint(0, 1)
         players = [player_1, player_2]
 
-        # Do not print if a human is playing
-        humans_playing = player_1.requires_input or player_2.requires_input
-
         end_of_game = False
         turn = 1 - turn  # swap the turn initially, as we always swap before play
         while not end_of_game:
-            turn = 1 - turn  # swap the turn
+            # Swap the turn
+            turn = 1 - turn
+            # Print the relevant state
             if players[turn].requires_input:
                 self.print_obfuscated(players[turn])
             elif (verbose == 2) and not humans_playing:
                 self.print_full(*players)
-            end_of_game = self.process_play(players[turn])  # play the turn
+            # Play out the turn
+            end_of_game = self.process_play(
+                players[turn], turn, verbose=bool(verbose) or humans_playing
+            )
 
         if self.reshuffles > self.max_reshuffles:
             turn = -1  # It's a draw
 
-        if verbose:
+        if verbose or humans_playing:
             if turn < 0:
                 print("It's a draw!")
             else:

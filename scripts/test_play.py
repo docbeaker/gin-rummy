@@ -1,21 +1,11 @@
-from gin_rummy.players.card_points import CardPointPlayer, CardPointNNPlayer
-from gin_rummy.rl.training import train_agent
-from gin_rummy.gameplay.playouts import run_playouts
+from gin_rummy.players.card_points import CardPointPlayer
+from gin_rummy.players.human import HumanPlayer
+from gin_rummy.gameplay.game_manager import GameManager
 
 
 if __name__ == "__main__":
-    agent = CardPointNNPlayer(initialized=True)
-    print(agent.model.c2d.weight)
-
-    agent = train_agent(
-        10,
-        500,
-        agent,
+    GameManager().play_game(
         CardPointPlayer(),
+        CardPointPlayer(),
+        verbose=2
     )
-
-    print(agent.model.c2d.weight)
-
-    agent.set_temperature(1E-3)
-    n_wins, n_valid = run_playouts(200, agent, CardPointPlayer())
-    print(n_wins / n_valid)

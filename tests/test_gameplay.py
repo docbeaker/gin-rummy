@@ -1,6 +1,6 @@
 from numpy import where
 from numpy.random import choice
-from gin_rummy.gameplay.game_manager import BasePlayer, NV
+from gin_rummy.gameplay.game_manager import BasePlayer, NV, CardFormatter
 
 
 class RandomPlayer(BasePlayer):
@@ -11,34 +11,35 @@ class RandomPlayer(BasePlayer):
 
 
 class TestWinConditions:
-    straight4 = [x + 13 for x in range(2, 6)]
-    kind4 = [8 + 13 * i for i in range(4)]
+    straight4 = ["3D", "4D", "5D", "6D"]
+    kind4 = [f"9C", "9D", "9H", "9S"]
 
     def test_winning_combos(self):
-        combos = {
-            "4kind&3kind": [3 + 13, 3 + 26, 3 + 39] + self.kind4,
-            "4straight&3kind": self.straight4 + [8, 8 + 26, 8 + 39],
-            "4kind&3straight": self.kind4 + self.straight4[:3],
-            "4straight&3straight": self.straight4 + [x + 39 for x in range(9, 12)],
-            "overlapping": [6 + 39, 7 + 39, 9 + 39] + self.kind4,
-        }
+        combos = [
+            ["JS", "JC", "JH"] + self.kind4,
+            self.straight4 + ["10C", "10H", "10D"],
+            self.kind4 + self.straight4[:3],
+            self.straight4 + ["JS", "QS", "KS"],
+            ["6S", "7S", "8S"] + self.kind4,
+        ]
 
-        for _combo_name, _combo in combos.items():
+        for _combo in combos:
             player = RandomPlayer()
             for c in _combo:
                 player.accept_card(c)
             assert player.hand_matrix.sum() == 7, "wrong number of cards"
-            assert player.check_for_victory(), f"failed for {_combo_name}"
+            assert player.check_for_victory(), f"failed for {player.get_hand(human=True)}"
 
     def test_nonwinning_combos(self):
-        combos = {
-            "4and2-or-3and3": self.kind4 + [7, 9, 39],
-            "two3s": self.kind4[1:] + [4] + [5 + 13 * i for i in range(3)]
-        }
+        combos = [
+            self.kind4 + ["8C", "10C", "QC"],
+            self.kind4[1:] + ["10C", "10H", "10D", "JS"],
+            ["2C", "3C", "7D", "8H", "JH", "AS", "2S"]
+        ]
 
-        for _combo_name, _combo in combos.items():
+        for _combo in combos:
             player = RandomPlayer()
             for c in _combo:
                 player.accept_card(c)
             assert player.hand_matrix.sum() == 7, "wrong number of cards"
-            assert not player.check_for_victory(), f"failed for {_combo_name}"
+            assert not player.check_for_victory(), f"failed for {player.get_hand(human=True)}"
