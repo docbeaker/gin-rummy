@@ -201,7 +201,7 @@ class GameManager:
             discard_card, gin = player.discard_card(state)
             if verbose:
                 print(f"Player {idx} draws from deck and discards {CardFormatter.to_card(discard_card)}")
-        else:
+        elif verbose:
             print(
                 f"Player {idx} takes {CardFormatter.to_card(discard_top)} "
                 f"and discards {CardFormatter.to_card(discard_card)}"
