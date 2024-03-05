@@ -39,11 +39,6 @@ class PointsConvolutionNN(nn.Module):
         )
         self.activation = nn.LogSoftmax(dim=-1)
 
-        nn.init.normal_(self.c2d.weight, std=0.02)
-        with no_grad():
-            self.c2d.weight.data[..., 3] += 1.0
-            self.c2d.weight.data[..., 3, :] += 1.0
-
     def forward(self, state: Tensor):
         B, ns, nv = state.size()
         x = -self.c2d(state.unsqueeze(1)).squeeze()  # put in one channel
@@ -55,6 +50,9 @@ class CardPointNNPlayer(CardPointPlayer):
     def __init__(self):
         super().__init__()
         self.model = PointsConvolutionNN()
+        self.model.c2d.weight.data = Tensor(
+            np.expand_dims(self.points_kernel, (0, 1))
+        )
 
     def _choose_card_to_discard(self, discard_top: int) -> int:
         hm_tensor = Tensor(self.hand_matrix)

@@ -48,7 +48,7 @@ def train_agent(
     if critic_type:
         critic = getattr(critics, critic_type)()
         model_params.append(
-            {"params": critic.parameters(), "lr": 0.001}
+            {"params": critic.parameters(), "lr": 0.01}
         )
     else:
         critic = None
@@ -98,7 +98,8 @@ def train_agent(
             if critic is not None:
                 rpred = critic(state, ostate)
                 critic_loss = critic_loss_function(rpred, reward)
-                reward = reward - torch.exp(rpred)
+                with torch.no_grad():
+                    reward = reward - torch.exp(rpred)
             else:
                 critic_loss = 0.0
 

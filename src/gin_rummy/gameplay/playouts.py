@@ -31,7 +31,7 @@ def run_playouts(
         else:
             player_wins += 1 - winner
             valid_games += 1
-            gm.dataset.record_win_label(player_wins)
+            gm.dataset.record_win_label(1 - winner)
 
         starting_turn = 1 - starting_turn
 
