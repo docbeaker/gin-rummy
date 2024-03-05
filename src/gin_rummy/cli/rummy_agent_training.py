@@ -10,8 +10,9 @@ from gin_rummy.players.card_points import CardPointNNPlayer, CardPointPlayer
 @click.argument("output")
 @click.option("--games", type=int, default=500)
 @click.option("--epochs", type=int, default=10)
-def main(output: Path, games: int = 500, epochs: int = 10):
-    agent = CardPointNNPlayer(initialized=True)
+@click.option("--critic", type=str, required=False)
+def main(output: Path, games: int = 500, epochs: int = 10, critic: str = None):
+    agent = CardPointNNPlayer()
     opponent_pool = CardPointPlayer()
 
     agent = train_agent(
@@ -19,8 +20,9 @@ def main(output: Path, games: int = 500, epochs: int = 10):
         games,
         agent,
         opponent_pool,
+        critic_type=critic,
         output=Path(output, "ckpt.pt"),
-        always_save_checkpoint=False
+        always_save_checkpoint=False,
     )
 
 

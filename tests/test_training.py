@@ -7,3 +7,8 @@ class TestRLTraining:
         _ = train_agent(
             2, 10, CardPointNNPlayer(), CardPointPlayer()
         )
+
+    def test_training_with_critic(self):
+        _ = train_agent(
+            2, 10, CardPointNNPlayer(), CardPointPlayer(), critic_type="MLPCritic"
+        )

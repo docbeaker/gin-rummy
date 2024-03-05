@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.signal import convolve2d
-from numpy.typing import ArrayLike
 
 from torch import nn, Tensor, no_grad
 from torch.distributions import Categorical
@@ -32,17 +31,18 @@ class CardPointPlayer(BasePlayer):
 
 
 class PointsConvolutionNN(nn.Module):
-    def __init__(self, temperature: float = 1.0, init_kernel: ArrayLike = None):
+    def __init__(self, temperature: float = 1.0):
         super().__init__()
+        self.t = temperature
         self.c2d = nn.Conv2d(
             1, 1, (7, 7), padding="same", bias=False
         )
-        self.t = temperature
         self.activation = nn.LogSoftmax(dim=-1)
-        if init_kernel is not None:
-            self.c2d.weight.data = Tensor(
-                np.expand_dims(init_kernel, (0, 1))
-            )
+
+        nn.init.normal_(self.c2d.weight, std=0.02)
+        with no_grad():
+            self.c2d.weight.data[..., 3] += 1.0
+            self.c2d.weight.data[..., 3, :] += 1.0
 
     def forward(self, state: Tensor):
         B, ns, nv = state.size()
@@ -52,11 +52,9 @@ class PointsConvolutionNN(nn.Module):
 
 
 class CardPointNNPlayer(CardPointPlayer):
-    def __init__(self, initialized: bool = False):
+    def __init__(self):
         super().__init__()
-        self.model = PointsConvolutionNN(
-            init_kernel=self.points_kernel if initialized else None
-        )
+        self.model = PointsConvolutionNN()
 
     def _choose_card_to_discard(self, discard_top: int) -> int:
         hm_tensor = Tensor(self.hand_matrix)

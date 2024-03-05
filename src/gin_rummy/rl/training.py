@@ -1,3 +1,9 @@
+"""
+Useful references:
+
+https://www.tensorflow.org/tutorials/reinforcement_learning/actor_critic
+"""
+
 import torch
 from torch.utils.data import DataLoader
 from time import time
@@ -7,6 +13,7 @@ from typing import List, Union
 
 from gin_rummy.gameplay.game_manager import BasePlayer
 from gin_rummy.gameplay.playouts import run_playouts
+from gin_rummy.rl import critics
 
 
 def save_checkpoint(
@@ -29,14 +36,25 @@ def train_agent(
     n_games: int,
     player: BasePlayer,
     opponent_pool: Union[List[BasePlayer], BasePlayer],
+    critic_type: str = None,
     output: Path = None,
-    always_save_checkpoint: bool = False
+    always_save_checkpoint: bool = False,
 ) -> BasePlayer:
     assert hasattr(player, "model"), "player must be using a model for training!"
-    optimizer = torch.optim.Adam(
-        player.model.parameters(),
-        lr=1E-1
-    )
+
+    model_params = [
+        {"params": player.model.parameters()}
+    ]
+    if critic_type:
+        critic = getattr(critics, critic_type)()
+        model_params.append(
+            {"params": critic.parameters(), "lr": 0.001}
+        )
+    else:
+        critic = None
+    critic_loss_function = torch.nn.BCEWithLogitsLoss()
+
+    optimizer = torch.optim.Adam(model_params, lr=0.1)
 
     if output:
         output.parent.mkdir(exist_ok=True, parents=True)
@@ -58,7 +76,10 @@ def train_agent(
         wr = n_wins / n_played
         win_rates.append(wr)
         if output and e and ((wr > best_win_rate) or always_save_checkpoint):
-            save_checkpoint(output, player.model, optimizer, win_rates=win_rates)
+            add_kwargs = dict(win_rates=win_rates)
+            if critic is not None:
+                add_kwargs["critic_model"] = critic.state_dict()
+            save_checkpoint(output, player.model, optimizer, **add_kwargs)
             print("Model checkpoint saved!")
         best_win_rate = max(wr, best_win_rate)
 
@@ -73,15 +94,24 @@ def train_agent(
         )
 
         # Basic REINFORCE algorithm to start
-        for state, _, action, reward in dl:
+        for state, ostate, action, reward in dl:
+            if critic is not None:
+                rpred = critic(state, ostate)
+                critic_loss = critic_loss_function(rpred, reward)
+                reward = reward - torch.exp(rpred)
+            else:
+                critic_loss = 0.0
+
+            # TODO: make configurable
             scaled_reward = (reward - reward.mean()) / (reward.std() + 1E-8)
 
+            # Compute policy probabilities
             optimizer.zero_grad()
             logp = player.model(state)
             logp_a = logp.gather(-1, action.unsqueeze(-1)).squeeze()
+            actor_loss = -(scaled_reward * logp_a).mean()
 
-            loss = -(scaled_reward * logp_a).mean()
-
+            loss = actor_loss + critic_loss
             loss.backward()
             optimizer.step()
 
