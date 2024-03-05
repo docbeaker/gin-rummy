@@ -65,9 +65,6 @@ class BasePlayer(ABC):
     def requires_input(self):
         return False
 
-    def initialize_dataset(self):
-        self.dataset = GameplayDataset()
-
     def clear_hand(self):
         self.hand_matrix[:, :] = False
 
@@ -77,15 +74,12 @@ class BasePlayer(ABC):
             assert card >= 0, "player tried to accept invalid card"
         self.hand_matrix[card // NV, card % NV] = True
 
-    def compute_state(self, game: "GameManager"):
-        return None
-
     def set_temperature(self, temperature: float):
         if hasattr(self, "model"):
             self.model.t = temperature
 
     @abstractmethod
-    def _choose_card_to_discard(self, state) -> int:
+    def _choose_card_to_discard(self, discard_top: int) -> int:
         pass
 
     def _get_straight_scores(self) -> ArrayLike:
@@ -133,11 +127,11 @@ class BasePlayer(ABC):
 
         return False
 
-    def discard_card(self, state) -> Tuple[int, bool]:
+    def discard_card(self, discard_top: int) -> Tuple[int, bool]:
         """
         Return a tuple of card to add to discard pile and bool indicating whether gin
         """
-        discard_card = self._choose_card_to_discard(state)
+        discard_card = self._choose_card_to_discard(discard_top)
         self.hand_matrix[discard_card // NV, discard_card % NV] = False
         return discard_card, self.check_for_victory()
 
@@ -154,11 +148,12 @@ class BasePlayer(ABC):
 class GameManager:
     HAND_SIZE = 7
 
-    def __init__(self, max_reshuffles: int = 0):
+    def __init__(self, max_reshuffles: int = 0, record: bool = False):
         self.max_reshuffles = max_reshuffles
         self.deck, self.discard_pile = [], []
         self.reshuffles = 0
         self.reset()
+        self.dataset = GameplayDataset() if record else None
 
     def reset(self):
         self.deck = list(range(NS * NV))
@@ -175,7 +170,13 @@ class GameManager:
                 player_.accept_card(self.deck.pop())
         self.discard_pile.append(self.deck.pop())
 
-    def process_play(self, player: BasePlayer, idx: int, verbose: bool = False) -> bool:
+    def process_play(
+        self,
+        player: BasePlayer,
+        opponent: BasePlayer,
+        idx: int,
+        verbose: bool = False
+    ) -> bool:
         """
         Return whether it is the end of the game
         """
@@ -189,18 +190,23 @@ class GameManager:
                 return True
 
         # If model wants to discard the discard, have it take top of deck instead
-        state = player.compute_state(self)
         discard_top = self.discard_pile[-1]
         player.accept_card(self.discard_pile.pop())
-        discard_card, gin = player.discard_card(state)
+        hands = player.hand_matrix.copy(), opponent.hand_matrix.copy()
+        discard_card, gin = player.discard_card(discard_top)
+        if idx == 0 and self.dataset is not None:
+            self.dataset.record_hands_and_action(*hands, discard_card)
         # Note weird edge case: can be dealt gin, in which case correct strategy is
         # to take discard card and then use it to gin
         if (discard_card == discard_top) and not gin:
             self.discard_pile.append(discard_card)  # put that card back and try again
             player.accept_card(self.deck.pop())
-            discard_card, gin = player.discard_card(state)
+            hands = player.hand_matrix.copy(), opponent.hand_matrix.copy()
+            discard_card, gin = player.discard_card(discard_top)
             if verbose:
                 print(f"Player {idx} draws from deck and discards {CardFormatter.to_card(discard_card)}")
+            if idx == 0 and self.dataset is not None:
+                self.dataset.record_hands_and_action(*hands, discard_card)
         elif verbose:
             print(
                 f"Player {idx} takes {CardFormatter.to_card(discard_top)} "
@@ -256,7 +262,7 @@ class GameManager:
                 self.print_full(*players)
             # Play out the turn
             end_of_game = self.process_play(
-                players[turn], turn, verbose=bool(verbose) or humans_playing
+                players[turn], players[1-turn], turn, verbose=bool(verbose) or humans_playing
             )
 
         if self.reshuffles > self.max_reshuffles:

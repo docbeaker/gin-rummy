@@ -1,33 +1,32 @@
 from torch import Tensor
 from torch.utils.data import Dataset
 
+from numpy.typing import ArrayLike
+
 
 class GameplayDataset(Dataset):
     def __init__(self):
-        """
-        TODO: will likely need to record hands as well
-        """
-        self.states = []
+        self.player_hand = []
+        self.opponent_hand = []
         self.actions = []
-        self.rewards = []
+        self.win_label = []
 
-    def append(self, state: Tensor, action: int, reward: float = None):
-        self.states.append(state)
+    def record_hands_and_action(self, player_hand: ArrayLike, opponent_hand: ArrayLike, action: int):
+        self.player_hand.append(Tensor(player_hand))
+        self.opponent_hand.append(Tensor(opponent_hand))
         self.actions.append(action)
-        if reward:
-            self.rewards.append(reward)
 
-    def apply_game_reward(self, reward: float):
-        while len(self.rewards) < len(self.states):
-            self.rewards.append(reward)
+    def record_win_label(self, label: float):
+        while len(self.win_label) < len(self.player_hand):
+            self.win_label.append(float(label))
 
-    def clear_unrewarded(self):
-        nr = len(self.rewards)
-        self.states = self.states[:nr]
-        self.actions = self.actions[:nr]
+    def clear_unlabelebd(self):
+        nr = len(self.win_label)
+        for a in ["player_hand", "opponent_hand", "actions"]:
+            setattr(self, a, getattr(self, a)[:nr])
 
     def __getitem__(self, i: int):
-        return self.states[i], self.actions[i], self.rewards[i]
+        return self.player_hand[i], self.opponent_hand[i], self.actions[i], self.win_label[i]
 
     def __len__(self):
-        return len(self.states)
+        return len(self.player_hand)

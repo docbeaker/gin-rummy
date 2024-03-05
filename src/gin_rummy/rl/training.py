@@ -38,14 +38,14 @@ def train_agent(
         lr=1E-1
     )
 
-    output.parent.mkdir(exist_ok=True, parents=True)
+    if output:
+        output.parent.mkdir(exist_ok=True, parents=True)
 
     win_rates = []
     best_win_rate = 0.0
     for e in range(n_epochs + 1):
         st = time()
-        player.initialize_dataset()
-        n_wins, n_played = run_playouts(n_games, player, opponent_pool)
+        n_wins, n_played, dataset = run_playouts(n_games, player, opponent_pool)
         if not n_played:
             print(f"Epoch {e} failed to generate any valid games!")
             continue
@@ -57,7 +57,7 @@ def train_agent(
         # Check if we should be saving a model
         wr = n_wins / n_played
         win_rates.append(wr)
-        if e and ((wr > best_win_rate) or always_save_checkpoint):
+        if output and e and ((wr > best_win_rate) or always_save_checkpoint):
             save_checkpoint(output, player.model, optimizer, win_rates=win_rates)
             print("Model checkpoint saved!")
         best_win_rate = max(wr, best_win_rate)
@@ -66,14 +66,14 @@ def train_agent(
             break
 
         dl = DataLoader(
-            player.dataset,
-            batch_size=len(player.dataset),
+            dataset,
+            batch_size=len(dataset),
             shuffle=True,
             num_workers=8
         )
 
         # Basic REINFORCE algorithm to start
-        for state, action, reward in dl:
+        for state, _, action, reward in dl:
             scaled_reward = (reward - reward.mean()) / (reward.std() + 1E-8)
 
             optimizer.zero_grad()

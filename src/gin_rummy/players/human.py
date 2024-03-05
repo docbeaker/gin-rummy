@@ -8,9 +8,6 @@ class HumanPlayer(BasePlayer):
     def requires_input(self):
         return True
 
-    def compute_state(self, game: GameManager):
-        return game.discard_pile[-1]
-
     def _choose_card_to_discard(self, discard_top: int) -> int:
         """
         State used by this player is just the top discard card
