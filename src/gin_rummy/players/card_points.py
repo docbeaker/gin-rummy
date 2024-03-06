@@ -71,7 +71,7 @@ class CardPointNNPlayer(CardPointPlayer):
         super().__init__()
         self.model = PointsConvolutionNN()
         # For debugging: initialize the model so that it matches the manual implementation
-        if True:
+        if False:
             self.model.c2d.weight.data = Tensor(
                 np.expand_dims(self.points_kernel, (0, 1))
             )
