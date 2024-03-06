@@ -39,6 +39,7 @@ def train_agent(
     critic_type: str = None,
     output: Path = None,
     always_save_checkpoint: bool = False,
+    num_workers: int = 4,
 ) -> BasePlayer:
     assert hasattr(player, "model"), "player must be using a model for training!"
 
@@ -90,7 +91,7 @@ def train_agent(
             dataset,
             batch_size=len(dataset),
             shuffle=True,
-            num_workers=8
+            num_workers=num_workers,
         )
 
         # Basic REINFORCE algorithm to start
