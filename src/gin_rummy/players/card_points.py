@@ -59,7 +59,9 @@ class PointsConvolutionNN(nn.Module):
         loga = self.play_activation(-loga / self.t)
         if opponent_hand is not None:
             y = self.c2d(opponent_hand.unsqueeze(1)).squeeze()
-            logw = self.scale * (x.sum(dim=(-1, -2)) - y.sum(dim=(-1, -2))) + self.bias
+            logw = self.scale * (
+                    (x * player_hand).sum(dim=(-1, -2)) - (y * opponent_hand).sum(dim=(-1, -2))
+            ) + self.bias
             logw = self.win_activation(logw)
         else:
             logw = None
