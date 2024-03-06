@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.signal import convolve2d
+from typing import Tuple, Optional
 
-from torch import nn, Tensor, no_grad
+from torch import nn, Tensor, no_grad, ones, tensor
 from torch.distributions import Categorical
 
 from ..gameplay.game_manager import BasePlayer
@@ -31,33 +32,54 @@ class CardPointPlayer(BasePlayer):
 
 
 class PointsConvolutionNN(nn.Module):
+    init_scale = 0.0
+    init_bias = 0.0
+
     def __init__(self, temperature: float = 1.0):
         super().__init__()
         self.t = temperature
         self.c2d = nn.Conv2d(
             1, 1, (7, 7), padding="same", bias=False
         )
-        self.activation = nn.LogSoftmax(dim=-1)
+        self.play_activation = nn.LogSoftmax(dim=-1)
+        self.win_activation = nn.LogSigmoid()
+        self.scale = nn.Parameter(tensor(self.init_scale))
+        self.bias = nn.Parameter(tensor(self.init_bias))
 
-    def forward(self, state: Tensor):
-        B, ns, nv = state.size()
-        x = -self.c2d(state.unsqueeze(1)).squeeze()  # put in one channel
-        x = x.masked_fill(state == 0, float("-inf")).view(B, ns * nv)
-        return self.activation(x / self.t)
+        nn.init.normal_(self.c2d.weight, std=0.1)
+        with no_grad():
+            self.c2d.weight.data[..., 3, :] += ones(7)
+            self.c2d.weight.data[..., 3] += ones(7)
+            self.c2d.weight.data[..., 3, 3] -= 1
+
+    def forward(self, player_hand: Tensor, opponent_hand: Tensor = None) -> Tuple[Tensor, Optional[Tensor]]:
+        B, ns, nv = player_hand.size()
+        x = self.c2d(player_hand.unsqueeze(1)).squeeze()  # add dummy "channel" for convolution
+        loga = x.masked_fill(player_hand == 0, float("inf")).view(B, ns * nv)
+        loga = self.play_activation(-loga / self.t)
+        if opponent_hand is not None:
+            y = self.c2d(opponent_hand.unsqueeze(1)).squeeze()
+            logw = self.scale * (x.sum(dim=(-1, -2)) - y.sum(dim=(-1, -2))) + self.bias
+            logw = self.win_activation(logw)
+        else:
+            logw = None
+        return loga, logw
 
 
 class CardPointNNPlayer(CardPointPlayer):
     def __init__(self):
         super().__init__()
         self.model = PointsConvolutionNN()
-        self.model.c2d.weight.data = Tensor(
-            np.expand_dims(self.points_kernel, (0, 1))
-        )
+        # For debugging: initialize the model so that it matches the manual implementation
+        if True:
+            self.model.c2d.weight.data = Tensor(
+                np.expand_dims(self.points_kernel, (0, 1))
+            )
 
     def _choose_card_to_discard(self, discard_top: int) -> int:
         hm_tensor = Tensor(self.hand_matrix)
         with no_grad():
-            logits = self.model(hm_tensor.unsqueeze(0))  # No batch here, so make a batch dimension
-        m = Categorical(nn.functional.softmax(logits.squeeze(), dim=-1))
+            logits, _ = self.model(hm_tensor.unsqueeze(0))  # No batch here, so make a batch dimension
+        m = Categorical(logits=logits.squeeze())  # squeeze to remove batch
         a_idx = int(m.sample())
         return a_idx

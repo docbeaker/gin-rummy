@@ -13,7 +13,6 @@ from typing import List, Union
 
 from gin_rummy.gameplay.game_manager import BasePlayer
 from gin_rummy.gameplay.playouts import run_playouts
-from gin_rummy.rl import critics
 
 
 def save_checkpoint(
@@ -31,31 +30,28 @@ def save_checkpoint(
     torch.save(state, output)
 
 
+def get_lr(step: int, lr: float, lr_warmup_steps: int):
+    if step >= lr_warmup_steps:
+        return lr
+    return step * lr / lr_warmup_steps
+
+
 def train_agent(
     n_epochs: int,
     n_games: int,
     player: BasePlayer,
     opponent_pool: Union[List[BasePlayer], BasePlayer],
-    critic_type: str = None,
+    ignore_critic: bool = False,
+    lr: float = 0.1,
+    lr_warmup_steps: int = 0,
     output: Path = None,
     always_save_checkpoint: bool = False,
     num_workers: int = 4,
 ) -> BasePlayer:
     assert hasattr(player, "model"), "player must be using a model for training!"
 
-    model_params = [
-        {"params": player.model.parameters()}
-    ]
-    if critic_type:
-        critic = getattr(critics, critic_type)()
-        model_params.append(
-            {"params": critic.parameters(), "lr": 0.01}
-        )
-    else:
-        critic = None
+    optimizer = torch.optim.Adam(player.model.parameters(), lr=0.1)
     critic_loss_function = torch.nn.BCEWithLogitsLoss()
-
-    optimizer = torch.optim.Adam(model_params, lr=0.1)
 
     if output:
         output.parent.mkdir(exist_ok=True, parents=True)
@@ -77,15 +73,16 @@ def train_agent(
         wr = n_wins / n_played
         win_rates.append(wr)
         if output and e and ((wr > best_win_rate) or always_save_checkpoint):
-            add_kwargs = dict(win_rates=win_rates)
-            if critic is not None:
-                add_kwargs["critic_model"] = critic.state_dict()
-            save_checkpoint(output, player.model, optimizer, **add_kwargs)
+            save_checkpoint(output, player.model, optimizer, win_rates=win_rates)
             print("Model checkpoint saved!")
         best_win_rate = max(wr, best_win_rate)
 
         if e == n_epochs:
             break
+
+        elr = get_lr(e + 1, lr, lr_warmup_steps)
+        for pg in optimizer.param_groups:
+            pg["lr"] = elr
 
         dl = DataLoader(
             dataset,
@@ -96,20 +93,18 @@ def train_agent(
 
         # Basic REINFORCE algorithm to start
         for state, ostate, action, reward in dl:
-            if critic is not None:
-                rpred = critic(state, ostate)
-                critic_loss = critic_loss_function(rpred, reward)
-                with torch.no_grad():
-                    reward = reward - torch.exp(rpred)
-            else:
+            optimizer.zero_grad()
+
+            logp, logr = player.model(state, ostate)
+            if ignore_critic:
                 critic_loss = 0.0
+            else:
+                critic_loss = critic_loss_function(logr, reward)
+                with torch.no_grad():
+                    reward = reward - torch.exp(logr)
 
             # TODO: make configurable
             scaled_reward = (reward - reward.mean()) / (reward.std() + 1E-8)
-
-            # Compute policy probabilities
-            optimizer.zero_grad()
-            logp = player.model(state)
             logp_a = logp.gather(-1, action.unsqueeze(-1)).squeeze()
             actor_loss = -(scaled_reward * logp_a).mean()
 
