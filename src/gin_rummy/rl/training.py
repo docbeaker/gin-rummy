@@ -104,9 +104,9 @@ def train_agent(
                     reward = reward - torch.exp(logr)
 
             # TODO: make configurable
-            scaled_reward = (reward - reward.mean()) / (reward.std() + 1E-8)
+            # scaled_reward = (reward - reward.mean()) / (reward.std() + 1E-8)
             logp_a = logp.gather(-1, action.unsqueeze(-1)).squeeze()
-            actor_loss = -(scaled_reward * logp_a).mean()
+            actor_loss = -(reward * logp_a).mean()
 
             loss = actor_loss + critic_loss
             loss.backward()
