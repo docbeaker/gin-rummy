@@ -44,13 +44,16 @@ class PointsConvolutionNN(nn.Module):
         self.cross_init_(self.c2d.weight)
 
         # Critic definition
+        self.nc = 32
         self.critic_conv = nn.Conv2d(
-            1, 8, kernel_size=(5, 5), padding="same", bias=True
+            1, self.nc, kernel_size=(7, 7), padding="same", bias=True
         )
         nn.init.normal_(self.critic_conv.weight, std=0.02)
         nn.init.zeros_(self.critic_conv.bias)
         # TODO: would dropout be helpful?
-        self.fc = nn.Linear(16, 1)
+        self.fc = nn.Linear(2 * self.nc, 2 * self.nc)
+        nn.init.normal_(self.fc.weight, std=0.02)
+        self.fc_out = nn.Linear(2 * self.nc, 1)
         nn.init.normal_(self.fc.weight, std=0.02)
         nn.init.zeros_(self.fc.bias)
 
@@ -64,7 +67,9 @@ class PointsConvolutionNN(nn.Module):
 
     def _critic_forward(self, x: Tensor):
         B, ns, nv = x.size()
-        cx = self.critic_conv(x.unsqueeze(1)).view(B, 8, ns * nv)
+        cx = (
+                x.unsqueeze(1) + self.critic_conv(x.unsqueeze(1))
+        ).view(B, self.nc, ns * nv)
         # max pooling across channels
         return cx.max(dim=-1)[0]
 
@@ -76,6 +81,7 @@ class PointsConvolutionNN(nn.Module):
             pc = self._critic_forward(player_hand)
             oc = self._critic_forward(opponent_hand)
             s = self.fc(cat((pc, oc), dim=-1))
+            s = self.fc_out(nn.functional.relu(s))
             s = self.win_activation(s.squeeze())
         else:
             s = None
