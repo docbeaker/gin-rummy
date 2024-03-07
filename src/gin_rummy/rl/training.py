@@ -93,6 +93,7 @@ def train_agent(
         )
 
         # Basic REINFORCE algorithm to start
+        player.model.train()
         for state, ostate, action, reward in dl:
             optimizer.zero_grad()
 

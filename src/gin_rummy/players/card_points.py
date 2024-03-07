@@ -49,6 +49,7 @@ class PointsConvolutionNN(nn.Module):
         )
         nn.init.normal_(self.critic_conv.weight, std=0.02)
         nn.init.zeros_(self.critic_conv.bias)
+        # TODO: would dropout be helpful?
         self.fc = nn.Linear(16, 1)
         nn.init.normal_(self.fc.weight, std=0.02)
         nn.init.zeros_(self.fc.bias)
