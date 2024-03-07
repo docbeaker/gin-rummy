@@ -279,7 +279,7 @@ class GameManager:
                 print("It's a draw!")
             else:
                 print(f"Game concluded! Player {turn} wins!")
-            for idx in [turn, 1 - turn]:
-                print(f">> Player {idx} hand: {players[idx].get_hand(human=True)}")
+                for idx in [turn, 1 - turn]:
+                    print(f">> Player {idx} hand: {players[idx].get_hand(human=True)}")
 
         return turn
