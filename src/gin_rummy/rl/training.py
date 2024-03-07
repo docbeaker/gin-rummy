@@ -44,6 +44,7 @@ def train_agent(
     ignore_critic: bool = False,
     lr: float = 0.1,
     lr_warmup_steps: int = 0,
+    unscaled_rewards: bool = False,
     output: Path = None,
     always_save_checkpoint: bool = False,
     num_workers: int = 4,
@@ -95,7 +96,7 @@ def train_agent(
         for state, ostate, action, reward in dl:
             optimizer.zero_grad()
 
-            logp, logr = player.model(state, ostate)
+            logp, logr = player.model(state, None if ignore_critic else ostate)
             if ignore_critic:
                 critic_loss = 0.0
             else:
@@ -104,7 +105,8 @@ def train_agent(
                     reward = reward - torch.exp(logr)
 
             # TODO: make configurable
-            # scaled_reward = (reward - reward.mean()) / (reward.std() + 1E-8)
+            if not unscaled_rewards:
+                reward = (reward - reward.mean()) / (reward.std() + 1E-8)
             logp_a = logp.gather(-1, action.unsqueeze(-1)).squeeze()
             actor_loss = -(reward * logp_a).mean()
 
