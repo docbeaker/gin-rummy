@@ -3,8 +3,15 @@ import click
 from pathlib import Path
 
 from gin_rummy import players
-from gin_rummy.gameplay.game_manager import GameManager, BasePlayer
+from gin_rummy.gameplay.game_manager import GameManager
 from gin_rummy.gameplay.playouts import run_playouts
+
+
+def create_player(player_name: str, model_path: Path = None):
+    player = getattr(players, player_name)()
+    if model_path:
+        player.load_model(model_path)
+    return player
 
 
 @click.command()
@@ -24,12 +31,8 @@ def play_game(
 ):
     assert games > 0, "you want to play <= 0 games?"
 
-    opp = getattr(players, opponent)()
-    if opponent_model:
-        opp.load_model(opponent_model)
-    play = getattr(players, player)()
-    if player_model:
-        play.load_model(player_model)
+    play = create_player(player, model_path=player_model)
+    opp = create_player(opponent, model_path=opponent_model)
 
     if games > 1:
         assert not (opp.requires_input or play.requires_input), "Humans should play games one at at time"
