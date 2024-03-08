@@ -267,13 +267,19 @@ class GameManager:
 
         if self.reshuffles > self.max_reshuffles:
             turn = -1  # It's a draw
+            if self.dataset is not None:
+                # Forget this game
+                # NOTE: could do 0.5 reward? But not informative, so perhaps just clear
+                self.dataset.clear_unlabeled()
+        elif self.dataset is not None:
+            self.dataset.record_win_label(1 - turn)
 
         if verbose or humans_playing:
             if turn < 0:
                 print("It's a draw!")
             else:
                 print(f"Game concluded! Player {turn} wins!")
-            for idx in [turn, 1 - turn]:
-                print(f">> Player {idx} hand: {players[idx].get_hand(human=True)}")
+                for idx in [turn, 1 - turn]:
+                    print(f">> Player {idx} hand: {players[idx].get_hand(human=True)}")
 
         return turn

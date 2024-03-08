@@ -20,7 +20,7 @@ class GameplayDataset(Dataset):
         while len(self.win_label) < len(self.player_hand):
             self.win_label.append(float(label))
 
-    def clear_unlabelebd(self):
+    def clear_unlabeled(self):
         nr = len(self.win_label)
         for a in ["player_hand", "opponent_hand", "actions"]:
             setattr(self, a, getattr(self, a)[:nr])

@@ -13,6 +13,7 @@ from gin_rummy.players.card_points import CardPointNNPlayer, CardPointPlayer
 @click.option("--ignore-critic", is_flag=True, default=False)
 @click.option("--lr", type=float, default=0.1)
 @click.option("--lr-warmup-steps", type=int, default=0)
+@click.option("--unscaled-rewards", is_flag=True, default=False)
 @click.option("--workers", type=int, default=4)
 def main(
     output: Path,
@@ -21,6 +22,7 @@ def main(
     ignore_critic: bool = False,
     lr: float = 0.1,
     lr_warmup_steps: int = 0,
+    unscaled_rewards: bool = False,
     workers: int = 4
 ):
     agent = CardPointNNPlayer()
@@ -34,6 +36,7 @@ def main(
         ignore_critic=ignore_critic,
         lr=lr,
         lr_warmup_steps=lr_warmup_steps,
+        unscaled_rewards=unscaled_rewards,
         output=Path(output, "ckpt.pt"),
         always_save_checkpoint=False,
         num_workers=workers

@@ -2,7 +2,7 @@ import numpy as np
 from scipy.signal import convolve2d
 from typing import Tuple, Optional
 
-from torch import nn, Tensor, no_grad, ones, tensor
+from torch import nn, Tensor, no_grad, ones, cat
 from torch.distributions import Categorical
 
 from ..gameplay.game_manager import BasePlayer
@@ -32,9 +32,6 @@ class CardPointPlayer(BasePlayer):
 
 
 class PointsConvolutionNN(nn.Module):
-    init_scale = 0.0
-    init_bias = 0.0
-
     def __init__(self, temperature: float = 1.0):
         super().__init__()
         self.t = temperature
@@ -43,29 +40,52 @@ class PointsConvolutionNN(nn.Module):
         )
         self.play_activation = nn.LogSoftmax(dim=-1)
         self.win_activation = nn.LogSigmoid()
-        self.scale = nn.Parameter(tensor(self.init_scale))
-        self.bias = nn.Parameter(tensor(self.init_bias))
 
-        nn.init.normal_(self.c2d.weight, std=0.1)
+        self.cross_init_(self.c2d.weight)
+
+        # Critic definition
+        self.nc = 32
+        self.critic_conv = nn.Conv2d(
+            1, self.nc, kernel_size=(7, 7), padding="same", bias=True
+        )
+        nn.init.normal_(self.critic_conv.weight, std=0.02)
+        nn.init.zeros_(self.critic_conv.bias)
+        # TODO: would dropout be helpful?
+        self.fc = nn.Linear(2 * self.nc, 2 * self.nc)
+        nn.init.normal_(self.fc.weight, std=0.02)
+        self.fc_out = nn.Linear(2 * self.nc, 1)
+        nn.init.normal_(self.fc.weight, std=0.02)
+        nn.init.zeros_(self.fc.bias)
+
+    @staticmethod
+    def cross_init_(param, std: float = 0.1):
+        nn.init.normal_(param, std=std)
         with no_grad():
-            self.c2d.weight.data[..., 3, :] += ones(7)
-            self.c2d.weight.data[..., 3] += ones(7)
-            self.c2d.weight.data[..., 3, 3] -= 1
+            param.data[..., 3, :] += ones(7)
+            param.data[..., 3] += ones(7)
+            param.data[..., 3, 3] -= 1
+
+    def _critic_forward(self, x: Tensor):
+        B, ns, nv = x.size()
+        cx = (
+                x.unsqueeze(1) + self.critic_conv(x.unsqueeze(1))
+        ).view(B, self.nc, ns * nv)
+        # max pooling across channels
+        return cx.max(dim=-1)[0]
 
     def forward(self, player_hand: Tensor, opponent_hand: Tensor = None) -> Tuple[Tensor, Optional[Tensor]]:
         B, ns, nv = player_hand.size()
         x = self.c2d(player_hand.unsqueeze(1)).squeeze()  # add dummy "channel" for convolution
-        loga = x.masked_fill(player_hand == 0, float("inf")).view(B, ns * nv)
-        loga = self.play_activation(-loga / self.t)
+        x = x.masked_fill(player_hand == 0, float("inf")).view(B, ns * nv)
         if opponent_hand is not None:
-            y = self.c2d(opponent_hand.unsqueeze(1)).squeeze()
-            logw = self.scale * (
-                    (x * player_hand).sum(dim=(-1, -2)) - (y * opponent_hand).sum(dim=(-1, -2))
-            ) + self.bias
-            logw = self.win_activation(logw)
+            pc = self._critic_forward(player_hand)
+            oc = self._critic_forward(opponent_hand)
+            s = self.fc(cat((pc, oc), dim=-1))
+            s = self.fc_out(nn.functional.relu(s))
+            s = self.win_activation(s.squeeze())
         else:
-            logw = None
-        return loga, logw
+            s = None
+        return self.play_activation(-x / self.t), s
 
 
 class CardPointNNPlayer(CardPointPlayer):
