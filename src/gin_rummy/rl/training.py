@@ -117,4 +117,12 @@ def train_agent(
 
         print(f"Epoch completed in {time() - st:.2f}s")
 
+    if output:
+        save_checkpoint(
+            Path(output.parent, f"model.pt"),
+            player.model,
+            optimizer,
+            win_rates=win_rates
+        )
+
     return player
