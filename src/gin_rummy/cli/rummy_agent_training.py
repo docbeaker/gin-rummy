@@ -3,11 +3,12 @@ import click
 from pathlib import Path
 
 from gin_rummy.rl.training import train_agent
-from gin_rummy.players.card_points import CardPointNNPlayer, CardPointPlayer
+from gin_rummy.players import CardPointPlayer, RummyAgent
 
 
 @click.command()
-@click.argument("output")
+@click.argument("network", type=str)
+@click.argument("output", type=Path)
 @click.option("--games", type=int, default=500)
 @click.option("--epochs", type=int, default=10)
 @click.option("--ignore-critic", is_flag=True, default=False)
@@ -16,6 +17,7 @@ from gin_rummy.players.card_points import CardPointNNPlayer, CardPointPlayer
 @click.option("--unscaled-rewards", is_flag=True, default=False)
 @click.option("--workers", type=int, default=4)
 def main(
+    network: str,
     output: Path,
     games: int = 500,
     epochs: int = 10,
@@ -25,7 +27,7 @@ def main(
     unscaled_rewards: bool = False,
     workers: int = 4
 ):
-    agent = CardPointNNPlayer()
+    agent = RummyAgent(network=network)
     opponent_pool = CardPointPlayer()
 
     agent = train_agent(
@@ -37,7 +39,7 @@ def main(
         lr=lr,
         lr_warmup_steps=lr_warmup_steps,
         unscaled_rewards=unscaled_rewards,
-        output=Path(output, "ckpt.pt"),
+        output=output,
         always_save_checkpoint=False,
         num_workers=workers
     )

@@ -75,14 +75,6 @@ class BasePlayer(ABC):
             assert card >= 0, "player tried to accept invalid card"
         self.hand_matrix[card // NV, card % NV] = True
 
-    def set_temperature(self, temperature: float):
-        if hasattr(self, "model"):
-            self.model.t = temperature
-
-    def load_model(self, model_fp: Path):
-        if hasattr(self, "model"):
-            from torch import load
-            self.model.load_state_dict(load(model_fp)["model"])
 
     @abstractmethod
     def _choose_card_to_discard(self, discard_top: int) -> int:

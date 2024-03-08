@@ -55,7 +55,7 @@ def train_agent(
     critic_loss_function = torch.nn.BCEWithLogitsLoss()
 
     if output:
-        output.parent.mkdir(exist_ok=True, parents=True)
+        output.mkdir(exist_ok=True, parents=True)
 
     win_rates = []
     best_win_rate = 0.0
@@ -74,7 +74,7 @@ def train_agent(
         wr = n_wins / n_played
         win_rates.append(wr)
         if output and e and ((wr > best_win_rate) or always_save_checkpoint):
-            save_checkpoint(output, player.model, optimizer, win_rates=win_rates)
+            save_checkpoint(Path(output, "ckpt.pt"), player.model, optimizer, win_rates=win_rates)
             print("Model checkpoint saved!")
         best_win_rate = max(wr, best_win_rate)
 
@@ -119,7 +119,7 @@ def train_agent(
 
     if output:
         save_checkpoint(
-            Path(output.parent, f"model.pt"),
+            Path(output, f"model.pt"),
             player.model,
             optimizer,
             win_rates=win_rates
