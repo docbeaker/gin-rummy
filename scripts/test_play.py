@@ -8,7 +8,7 @@ from gin_rummy.gameplay.game_manager import GameManager
 if __name__ == "__main__":
     trained_agent = CardPointNNPlayer()
     trained_agent.model.load_state_dict(
-        load("/Users/jkearney/data/gin-rummy-models/v0/actor-bigcc/ckpt.pt")["model"]
+        load("/Users/jkearney/data/gin-rummy-models/v0/actor-bigcc-lr0.03/ckpt.pt")["model"]
     )
     alt_agent = CardPointPlayer()
 

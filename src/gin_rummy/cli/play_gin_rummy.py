@@ -1,23 +1,50 @@
 import click
 
+from pathlib import Path
+
 from gin_rummy import players
-from gin_rummy.gameplay.game_manager import GameManager
+from gin_rummy.gameplay.game_manager import GameManager, BasePlayer
+from gin_rummy.gameplay.playouts import run_playouts
 
 
 @click.command()
 @click.argument("opponent", type=str)
 @click.option("--player", default=players.HumanPlayer.__name__, required=False, type=str)
 @click.option("--go-first/--go-second", is_flag=True)
-def play_game(opponent: str, player: str = None, go_first: bool = None):
+@click.option("--games", type=int, default=1)
+@click.option("--opponent-model", type=Path)
+@click.option("--player-model", type=Path)
+def play_game(
+    opponent: str,
+    player: str = None,
+    go_first: bool = None,
+    games: int = 1,
+    opponent_model: Path = None,
+    player_model: Path = None,
+):
+    assert games > 0, "you want to play <= 0 games?"
+
+    opp: BasePlayer = getattr(players, opponent)()
+    if opponent_model:
+        opp.load_model(opponent_model)
+    play: BasePlayer = getattr(players, player)()
+    if player_model:
+        play.load_model(player_model)
+
+    if games > 1:
+        assert not (opp.requires_input or play.requires_input), "Humans should play games one at at time"
+        nwin, nvalid, _ = run_playouts(games, play, opp)
+        print(
+            f"Win = {nwin / games:.3f}, Draw = {1 - nvalid / games:.3f}, Loss = {(nvalid - nwin) / games:.3f}"
+        )
+        return
+
     if go_first is None:
         turn = None
     elif go_first:
         turn = 0
     else:
         turn = 1
-
-    opp = getattr(players, opponent)()
-    play = getattr(players, player)()
 
     _ = GameManager().play_game(
         play,
