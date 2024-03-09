@@ -13,6 +13,7 @@ from typing import List, Union
 
 from gin_rummy.gameplay.game_manager import BasePlayer
 from gin_rummy.gameplay.playouts import run_playouts
+from gin_rummy.players.agent import RummyAgent
 
 
 def save_checkpoint(
@@ -39,7 +40,7 @@ def get_lr(step: int, lr: float, lr_warmup_steps: int):
 def train_agent(
     n_epochs: int,
     n_games: int,
-    player: BasePlayer,
+    player: RummyAgent,
     opponent_pool: Union[List[BasePlayer], BasePlayer],
     ignore_critic: bool = False,
     lr: float = 0.1,
