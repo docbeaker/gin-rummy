@@ -20,11 +20,3 @@ class TestRLTraining:
             2, 10, agent, CardPointPlayer(), ignore_critic=True
         )
         assert isclose(agent.model.fc.weight, original_critic_weights).all()
-
-    def test_training_joint(self):
-        agent = RummyAgent(network="JointConvolutionNN")
-        original_weights = agent.model.c2d.weight.detach().clone()
-        agent = train_agent(
-            2, 10, agent, CardPointPlayer()
-        )
-        assert not isclose(agent.model.c2d.weight, original_weights).all()

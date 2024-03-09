@@ -14,16 +14,17 @@ from typing import List, Union
 from gin_rummy.gameplay.game_manager import BasePlayer
 from gin_rummy.gameplay.playouts import run_playouts
 from gin_rummy.players.agent import RummyAgent
+from gin_rummy.rl.policy_networks import PolicyNetwork
 
 
 def save_checkpoint(
     output: Path,
-    model: torch.nn.Module,
+    model: PolicyNetwork,
     optimizer: torch.optim.Optimizer,
     **kwargs
 ):
     state = {
-        "params": model.params,
+        "config": model.config,
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
     }

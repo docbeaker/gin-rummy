@@ -5,11 +5,41 @@ from typing import Tuple, Optional
 
 __all__ = [
     "SimpleConvolutionNN",
+    "ConvActorScoreCriticNN",
     "JointConvolutionNN"
 ]
 
+default = "SimpleConvolutionNN"
 
-class SimpleConvolutionNN(nn.Module):
+
+class PolicyNetwork(nn.Module):
+    @property
+    def config(self):
+        return dict(network=self.__class__.__name__, **self._config)
+
+    @property
+    def _config(self):
+        return {}
+
+    @staticmethod
+    def cross_init_(
+        param,
+        scale: float = 1.0,
+        std: float = 0.1,
+        row_idx: int = 3,
+        col_idx: int = 3,
+        center_offset: float = -1.0,
+    ):
+        nn.init.normal_(param, std=std)
+        with no_grad():
+            if row_idx is not None:
+                param.data[..., 3, :] += scale * ones(7)
+            if col_idx is not None:
+                param.data[..., 3] += scale * ones(7)
+            param.data[..., 3, 3] += center_offset
+
+
+class SimpleConvolutionNN(PolicyNetwork):
     def __init__(self, temperature: float = 1.0):
         super().__init__()
         self.t = temperature
@@ -35,18 +65,6 @@ class SimpleConvolutionNN(nn.Module):
         nn.init.normal_(self.fc.weight, std=0.02)
         nn.init.zeros_(self.fc.bias)
 
-    @property
-    def params(self):
-        return dict(network=self.__class__.__name__)
-
-    @staticmethod
-    def cross_init_(param, std: float = 0.1):
-        nn.init.normal_(param, std=std)
-        with no_grad():
-            param.data[..., 3, :] += ones(7)
-            param.data[..., 3] += ones(7)
-            param.data[..., 3, 3] -= 1
-
     def _critic_forward(self, x: Tensor):
         B, ns, nv = x.size()
         cx = (
@@ -70,7 +88,49 @@ class SimpleConvolutionNN(nn.Module):
         return self.play_activation(-x / self.t), s
 
 
-class JointConvolutionNN(nn.Module):
+class ConvActorScoreCriticNN(PolicyNetwork):
+    def __init__(self, temperature: float = 1.0, channels: int = 32):
+        super().__init__()
+        self.t = temperature
+
+        self.play_activation = nn.LogSoftmax(dim=-1)
+        self.win_activation = nn.LogSigmoid()
+
+        self.c2d = nn.Conv2d(
+            1, 1, (7, 7), padding="same", bias=False
+        )
+        self.cross_init_(self.c2d.weight)
+
+        self.nc = channels
+        self.critic_conv = nn.Conv2d(
+            1, self.nc, kernel_size=(7, 7), padding="same", bias=True
+        )
+        self.fc = nn.Linear(self.nc, 1, bias=False)
+        nn.init.normal_(self.fc.weight, std=0.02)
+        self.bias = nn.Parameter(tensor(0.0))
+
+    @property
+    def _config(self):
+        return dict(channels=self.nc)
+
+    def forward(self, player_hand: Tensor, opponent_hand: Tensor = None) -> Tuple[Tensor, Optional[Tensor]]:
+        b, ns, nv = player_hand.size()
+        mask = player_hand == 0
+        player_hand = player_hand.unsqueeze(1)  # add dummy "channel" for convolution
+        x = self.c2d(player_hand).squeeze()
+        x = x.masked_fill(mask, float("inf")).view(b, ns * nv)
+
+        if opponent_hand is not None:
+            yp = player_hand + self.critic_conv(player_hand)
+            yp = yp.view(b, self.nc, ns * nv).max(dim=-1)[0]
+            v = self.win_activation(self.bias + self.fc(yp).squeeze())
+        else:
+            v = None
+
+        return self.play_activation(-x / self.t), v
+
+
+class JointConvolutionNN(PolicyNetwork):
     def __init__(self, channels: int = 16, temperature: float = 1.0):
         super().__init__()
         self.t = temperature
@@ -93,11 +153,8 @@ class JointConvolutionNN(nn.Module):
         self.bias = nn.Parameter(tensor(0.0))
 
     @property
-    def params(self):
-        return dict(
-            network=self.__class__.__name__,
-            channels=self.channels
-        )
+    def _config(self):
+        return dict(channels=self.channels)
 
     def _convolve(self, x: Tensor) -> Tensor:
         b, ns, nv = x.size()

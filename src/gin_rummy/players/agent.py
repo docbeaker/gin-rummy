@@ -7,7 +7,7 @@ from ..rl import policy_networks
 
 
 class RummyAgent(BasePlayer):
-    def __init__(self, network: str = policy_networks.__all__[0], **network_kwargs):
+    def __init__(self, network: str = policy_networks.default, **network_kwargs):
         super().__init__()
         self.model = getattr(policy_networks, network)(**network_kwargs)
 
