@@ -23,8 +23,9 @@ def save_checkpoint(
     **kwargs
 ):
     state = {
-        "optimizer": optimizer.state_dict(),
+        "params": model.params,
         "model": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
     }
     for k, v in kwargs.items():
         state[k] = v

@@ -4,12 +4,12 @@ from typing import Tuple, Optional
 
 
 __all__ = [
-    "DecoupledActorCriticNNs",
+    "SimpleConvolutionNN",
     "JointConvolutionNN"
 ]
 
 
-class DecoupledActorCriticNNs(nn.Module):
+class SimpleConvolutionNN(nn.Module):
     def __init__(self, temperature: float = 1.0):
         super().__init__()
         self.t = temperature
@@ -34,6 +34,10 @@ class DecoupledActorCriticNNs(nn.Module):
         self.fc_out = nn.Linear(2 * self.nc, 1)
         nn.init.normal_(self.fc.weight, std=0.02)
         nn.init.zeros_(self.fc.bias)
+
+    @property
+    def params(self):
+        return dict(network=self.__class__.__name__)
 
     @staticmethod
     def cross_init_(param, std: float = 0.1):
@@ -87,6 +91,13 @@ class JointConvolutionNN(nn.Module):
             nn.Linear(channels, 64), nn.ReLU(), nn.Linear(64, 1)
         )
         self.bias = nn.Parameter(tensor(0.0))
+
+    @property
+    def params(self):
+        return dict(
+            network=self.__class__.__name__,
+            channels=self.channels
+        )
 
     def _convolve(self, x: Tensor) -> Tensor:
         b, ns, nv = x.size()
