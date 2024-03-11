@@ -82,7 +82,7 @@ class SimpleConvolutionNN(PolicyNetwork):
             oc = self._critic_forward(opponent_hand)
             s = self.fc(cat((pc, oc), dim=-1))
             s = self.fc_out(nn.functional.relu(s))
-            s = self.win_activation(s.squeeze())
+            s = self.win_activation(s.squeeze(dim=-1))
         else:
             s = None
         return self.play_activation(-x / self.t), s
@@ -123,7 +123,7 @@ class ConvActorScoreCriticNN(PolicyNetwork):
         if opponent_hand is not None:
             yp = player_hand + self.critic_conv(player_hand)
             yp = yp.view(b, self.nc, ns * nv).max(dim=-1)[0]
-            v = self.win_activation(self.bias + self.fc(yp).squeeze())
+            v = self.win_activation(self.bias + self.fc(yp).squeeze(dim=-1))
         else:
             v = None
 
@@ -167,7 +167,7 @@ class JointConvolutionNN(PolicyNetwork):
         if opponent_hand is not None:
             y = self._convolve(opponent_hand)
             v = self.bias + self.scoren(x.max(dim=-1)[0]) - self.scoren(y.max(dim=-1)[0])
-            v = self.win_activation(v).squeeze()
+            v = self.win_activation(v).squeeze(dim=-1)
         else:
             v = None
         card_scores = self.playn(x.transpose(-2, -1)).squeeze()  # transpose to use channel scores per card
