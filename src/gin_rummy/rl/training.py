@@ -46,7 +46,7 @@ def get_lr(step: int, lr: float, lr_warmup_steps: int):
 
 
 def train_agent(
-    n_epochs: int,
+    n_steps: int,
     n_games: int,
     player: RummyAgent,
     opponent_pool: Union[List[BasePlayer], BasePlayer],
@@ -54,9 +54,9 @@ def train_agent(
     ignore_critic: bool = False,
     lr: float = 0.1,
     lr_warmup_steps: int = 0,
+    k_epochs_per_step: int = 1,
     scale_minibatch: bool = True,
-    minibatch_size: int = 512,
-    max_minibatches: int = 8,
+    minibatch_size: int = 0,
     epsilon: float = 0.2,
     output: Path = None,
     always_save_checkpoint: bool = False,
@@ -79,83 +79,74 @@ def train_agent(
 
     win_rates = []
     best_win_rate = 0.0
-    for e in range(n_epochs + 1):
+    for t in range(n_steps + 1):
         st = time()
         n_wins, n_played, dataset = run_playouts(n_games, player, opponent_pool)
         if not n_played:
-            print(f"Epoch {e} failed to generate any valid games!")
+            print(f"Step {t} failed to generate any valid games!")
             continue
         print(
-            f"Epoch {e}: agent win percentage = {100 * n_wins / n_played: .1f}% "
+            f"Step {t}: agent win percentage = {100 * n_wins / n_played: .1f}% "
             f"({n_played} valid games)"
         )
 
         # Check if we should be saving a model
         wr = n_wins / n_played
         win_rates.append(wr)
-        if output and e and ((wr > best_win_rate) or always_save_checkpoint):
+        if output and t and ((wr > best_win_rate) or always_save_checkpoint):
             save_checkpoint(Path(output, "ckpt.pt"), player.model, optimizer, win_rates=win_rates)
             print("Model checkpoint saved!")
         best_win_rate = max(wr, best_win_rate)
 
-        if e == n_epochs:
+        if t == n_steps:
             break
 
-        elr = get_lr(e + 1, lr, lr_warmup_steps)
+        elr = get_lr(t + 1, lr, lr_warmup_steps)
         for pg in optimizer.param_groups:
             pg["lr"] = elr
 
-        if algorithm == "REINFORCE":
-            minibatch_size, max_minibatches = len(dataset), 1
-
         dl = DataLoader(
             dataset,
-            batch_size=minibatch_size,
+            batch_size=minibatch_size if minibatch_size else len(dataset),
             shuffle=True,
             num_workers=num_workers,
         )
-
-        # Run REINFORCE on entire dataset, or PPO on a maximum number of minibatches
         player.model.train()
-        minibatches = 0
-        for state, ostate, action, reward in dl:
-            optimizer.zero_grad()
+        for _ in range(k_epochs_per_step):
+            for state, ostate, action, reward in dl:
+                optimizer.zero_grad()
 
-            logp, logr = player.model(state, None if ignore_critic else ostate)
-            if ignore_critic:
-                critic_loss = 0.0
-            else:
-                critic_loss = critic_loss_function(logr, reward)
-                with torch.no_grad():
-                    reward = reward - torch.exp(logr)
+                logp, logr = player.model(state, None if ignore_critic else ostate)
+                if ignore_critic:
+                    critic_loss = 0.0
+                else:
+                    critic_loss = critic_loss_function(logr, reward)
+                    with torch.no_grad():
+                        reward = reward - torch.exp(logr)
 
-            if scale_minibatch:
-                reward = (reward - reward.mean()) / (reward.std() + 1E-8)
-            logp_a = logp.gather(-1, action.unsqueeze(-1)).squeeze()
+                if scale_minibatch:
+                    reward = (reward - reward.mean()) / (reward.std() + 1E-8)
+                logp_a = logp.gather(-1, action.unsqueeze(-1)).squeeze()
 
-            if algorithm == RF:
-                actor_loss = -(reward * logp_a).mean()
-            elif algorithm == PPO:
-                logp_ref, _ = ref_model(state)
-                logp_a_ref = logp_ref.gather(-1, action.unsqueeze(-1)).squeeze()
-                prob_ratio = torch.exp(logp_a - logp_a_ref)
-                clamped_prob_ratio = torch.clamp(prob_ratio, 1 - epsilon, 1 + epsilon)
-                actor_loss = -torch.minimum(prob_ratio * reward, clamped_prob_ratio * reward).mean()
-            else:
-                raise NotImplementedError
+                if algorithm == RF:
+                    actor_loss = -(reward * logp_a).mean()
+                elif algorithm == PPO:
+                    logp_ref, _ = ref_model(state)
+                    logp_a_ref = logp_ref.gather(-1, action.unsqueeze(-1)).squeeze()
+                    prob_ratio = torch.exp(logp_a - logp_a_ref)
+                    clamped_prob_ratio = torch.clamp(prob_ratio, 1 - epsilon, 1 + epsilon)
+                    actor_loss = -torch.minimum(prob_ratio * reward, clamped_prob_ratio * reward).mean()
+                else:
+                    raise NotImplementedError
 
-            loss = actor_loss + critic_loss
-            loss.backward()
-            optimizer.step()
-
-            minibatches += 1
-            if minibatches >= max_minibatches:
-                break
+                loss = actor_loss + critic_loss
+                loss.backward()
+                optimizer.step()
 
         if ref_model is not None:
             ref_model.load_state_dict(player.model.state_dict())
 
-        print(f"Epoch completed in {time() - st:.2f}s")
+        print(f"Step completed in {time() - st:.2f}s")
 
     if output:
         save_checkpoint(
