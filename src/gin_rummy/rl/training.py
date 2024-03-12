@@ -110,6 +110,7 @@ def train_agent(
             batch_size=minibatch_size if minibatch_size else len(dataset),
             shuffle=True,
             num_workers=num_workers,
+            drop_last=True,
         )
         player.model.train()
         for _ in range(k_epochs_per_step):
