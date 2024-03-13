@@ -6,10 +6,10 @@ from gin_rummy.gameplay.game_manager import GameManager
 
 
 if __name__ == "__main__":
-    trained_agent = RummyAgent(network="JointConvolutionNN")
-    if False:
+    trained_agent = RummyAgent(network="ConvActorScoreCriticNN")
+    if True:
         trained_agent.model.load_state_dict(
-            load("/Users/jkearney/data/gin-rummy-models/v0/actor-bigcc/ckpt.pt")["model"]
+            load("/Users/jkearney/data/gin-rummy-models/v1/actor-only-ppo/ckpt.pt")["model"]
         )
     alt_agent = CardPointPlayer()
 
@@ -19,11 +19,10 @@ if __name__ == "__main__":
     if turn >= 0:
         gm.dataset.record_win_label(turn)
 
-        dl = DataLoader(gm.dataset, batch_size=len(gm.dataset), shuffle=True)
+        dl = DataLoader(gm.dataset, batch_size=len(gm.dataset), shuffle=False)
 
         for ph, oh, _, _ in dl:
             with no_grad():
                 loga, logw = trained_agent.model(ph, oh)
 
-            print(exp(logw).min(), exp(logw).max())
-            break
+            print(exp(logw).numpy())

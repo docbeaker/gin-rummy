@@ -60,7 +60,6 @@ class BasePlayer(ABC):
         self.hand_matrix = np.zeros((NS, NV), dtype=bool)
         self.straight_kernel = np.arange(1, 8).reshape((1, -1))
         self.straight_kernel[0, 4:] = 0  # for evaluation
-        self.dataset = None
 
     @property
     def requires_input(self):
@@ -74,7 +73,6 @@ class BasePlayer(ABC):
             card = CardFormatter.to_index(card)
             assert card >= 0, "player tried to accept invalid card"
         self.hand_matrix[card // NV, card % NV] = True
-
 
     @abstractmethod
     def _choose_card_to_discard(self, discard_top: int) -> int:
@@ -148,8 +146,7 @@ class GameManager:
 
     def __init__(self, max_reshuffles: int = 0, record: bool = False):
         self.max_reshuffles = max_reshuffles
-        self.deck, self.discard_pile = [], []
-        self.reshuffles = 0
+        self.deck, self.discard_pile, self.seen_cards, self.reshuffles = None, None, None, None
         self.reset()
         self.dataset = GameplayDataset() if record else None
 
@@ -157,7 +154,12 @@ class GameManager:
         self.deck = list(range(NS * NV))
         shuffle(self.deck)
         self.discard_pile = []
+        self.seen_cards = np.zeros((NS, NV), dtype=bool)
         self.reshuffles = 0
+
+    def add_to_discard_pile(self, card: int):
+        self.discard_pile.append(card)
+        self.seen_cards[card // NV, card % NV] = True
 
     def deal(self, player_0: BasePlayer, player_1: BasePlayer):
         self.reset()
@@ -166,7 +168,17 @@ class GameManager:
         for _ in range(self.HAND_SIZE):
             for player_ in [player_0, player_1]:
                 player_.accept_card(self.deck.pop())
-        self.discard_pile.append(self.deck.pop())
+        self.add_to_discard_pile(self.deck.pop())
+
+    def get_3d_state(self, player: BasePlayer, opponent: BasePlayer):
+        # known opponent cards
+        known_opponent_hand = self.seen_cards & opponent.hand_matrix
+        # discarded cards are seen _and_ not in a hand
+        # In a hand = player | opponent
+        # (seen and not in a hand) or (not seen and in a hand) =  seen ^ (player | opponent)
+        # seen and not in a hand = seen & (seen ^ (player | opponent))
+        discarded = self.seen_cards & (self.seen_cards ^ (player.hand_matrix | opponent.hand_matrix))
+        return np.stack((player.hand_matrix, known_opponent_hand, discarded))
 
     def process_play(
         self,
@@ -179,13 +191,16 @@ class GameManager:
         Return whether it is the end of the game
         """
         if not self.deck:
-            self.deck = self.discard_pile
-            self.discard_pile = []
-            shuffle(self.deck)
-            self.discard_pile.append(self.deck.pop())
             self.reshuffles += 1
             if self.reshuffles > self.max_reshuffles:
                 return True
+            # Replace all cards and "hide" them according to mask
+            while self.discard_pile:
+                card = self.discard_pile.pop()
+                self.deck.append(card)
+                self.seen_cards[card // NV, card % NV] = False
+            shuffle(self.deck)
+            self.add_to_discard_pile(self.deck.pop())
 
         # If model wants to discard the discard, have it take top of deck instead
         discard_top = self.discard_pile[-1]
@@ -210,7 +225,7 @@ class GameManager:
                 f"Player {idx} takes {CardFormatter.to_card(discard_top)} "
                 f"and discards {CardFormatter.to_card(discard_card)}"
             )
-        self.discard_pile.append(discard_card)
+        self.add_to_discard_pile(discard_card)
         return gin
 
     def print_obfuscated(self, player: BasePlayer):

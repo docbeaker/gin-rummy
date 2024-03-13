@@ -1,6 +1,6 @@
 from numpy import where
 from numpy.random import choice
-from gin_rummy.gameplay.game_manager import BasePlayer, NV, CardFormatter
+from gin_rummy.gameplay.game_manager import BasePlayer, NV, GameManager
 
 
 class RandomPlayer(BasePlayer):
@@ -43,3 +43,19 @@ class TestWinConditions:
                 player.accept_card(c)
             assert player.hand_matrix.sum() == 7, "wrong number of cards"
             assert not player.check_for_victory(), f"failed for {player.get_hand(human=True)}"
+
+    def test_discard_logic(self):
+        p1 = RandomPlayer()
+        p2 = RandomPlayer()
+
+        gm = GameManager(max_reshuffles=0)
+        gm.play_game(p1, p2)
+
+        # Check that the discard is right
+        state = gm.get_3d_state(p1, p2)
+        discarded_cards = set(gm.discard_pile)
+        for idx, is_discarded in enumerate(state[-1].flatten()):
+            if is_discarded:
+                assert idx in discarded_cards
+            else:
+                assert idx not in discarded_cards
