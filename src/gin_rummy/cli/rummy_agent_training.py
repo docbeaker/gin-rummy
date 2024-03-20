@@ -12,7 +12,7 @@ from gin_rummy.players import CardPointPlayer, RummyAgent
 @click.option("--games", type=int, required=True)
 @click.option("--steps", type=int, required=True)
 @click.option("--algorithm", type=str, default=RF)
-@click.option("--ignore-critic", is_flag=True, default=False)
+@click.option("--gael", type=float, default=1.0)
 @click.option("--lr", type=float, default=0.1)
 @click.option("--lr-warmup-steps", type=int, default=0)
 @click.option("--no-minibatch-scaling", is_flag=True, default=False)
@@ -26,7 +26,7 @@ def main(
     games: int = 500,
     steps: int = 10,
     algorithm: str = RF,
-    ignore_critic: bool = False,
+    gael: float = 1.0,
     lr: float = 0.1,
     lr_warmup_steps: int = 0,
     no_minibatch_scaling: bool = False,
@@ -44,7 +44,7 @@ def main(
         agent,
         opponent_pool,
         algorithm=algorithm.upper(),
-        ignore_critic=ignore_critic,
+        gael=gael,
         lr=lr,
         lr_warmup_steps=lr_warmup_steps,
         scale_minibatch=not no_minibatch_scaling,

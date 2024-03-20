@@ -1,6 +1,5 @@
 import numpy as np
 
-from pathlib import Path
 from random import shuffle, randint
 from abc import ABC, abstractmethod
 from typing import Tuple, Union
@@ -77,7 +76,7 @@ class BasePlayer(ABC):
 
 
     @abstractmethod
-    def _choose_card_to_discard(self, discard_top: int) -> int:
+    def _choose_card_to_discard(self, state: Union[int, ArrayLike]) -> Tuple[int, float]:
         pass
 
     def _get_straight_scores(self) -> ArrayLike:
@@ -125,13 +124,16 @@ class BasePlayer(ABC):
 
         return False
 
-    def discard_card(self, discard_top: int) -> Tuple[int, bool]:
+    def discard_card(self, state: Union[int, ArrayLike]) -> Tuple[int, bool, float]:
         """
-        Return a tuple of card to add to discard pile and bool indicating whether gin
+        Return a tuple of
+        - card to add to discard pile
+        - bool indicating whether gin
+        - value network prediction of win probability
         """
-        discard_card = self._choose_card_to_discard(discard_top)
+        discard_card, pwin = self._choose_card_to_discard(state)
         self.hand_matrix[discard_card // NV, discard_card % NV] = False
-        return discard_card, self.check_for_victory()
+        return discard_card, self.check_for_victory(), pwin
 
     def get_hand(self, human: bool = False):
         """
@@ -190,21 +192,23 @@ class GameManager:
         # If model wants to discard the discard, have it take top of deck instead
         discard_top = self.discard_pile[-1]
         player.accept_card(self.discard_pile.pop())
-        hands = player.hand_matrix.copy(), opponent.hand_matrix.copy()
-        discard_card, gin = player.discard_card(discard_top)
+
+        state = discard_top if player.requires_input else player.hand_matrix.copy() # placeholder for more complicated state
+        discard_card, gin, pwin = player.discard_card(state)
         if idx == 0 and self.dataset is not None:
-            self.dataset.record_hands_and_action(*hands, discard_card)
+            self.dataset.record_state(state, discard_card, pwin)
+
         # Note weird edge case: can be dealt gin, in which case correct strategy is
         # to take discard card and then use it to gin
         if (discard_card == discard_top) and not gin:
             self.discard_pile.append(discard_card)  # put that card back and try again
             player.accept_card(self.deck.pop())
-            hands = player.hand_matrix.copy(), opponent.hand_matrix.copy()
-            discard_card, gin = player.discard_card(discard_top)
+            state = discard_top if player.requires_input else player.hand_matrix.copy()
+            discard_card, gin, pwin = player.discard_card(state)
             if verbose:
                 print(f"Player {idx} draws from deck and discards {CardFormatter.to_card(discard_card)}")
             if idx == 0 and self.dataset is not None:
-                self.dataset.record_hands_and_action(*hands, discard_card)
+                self.dataset.record_state(state, discard_card, pwin)
         elif verbose:
             print(
                 f"Player {idx} takes {CardFormatter.to_card(discard_top)} "
@@ -265,13 +269,16 @@ class GameManager:
 
         if self.reshuffles > self.max_reshuffles:
             turn = -1  # It's a draw
-            if self.dataset is not None:
+
+        if self.dataset is not None:
+            if turn < 0:
                 # Forget this game
                 # NOTE: could do 0.5 reward? But not informative, so perhaps just clear
                 self.dataset.clear_unlabeled()
-        elif self.dataset is not None:
-            self.dataset.record_win_label(1 - turn)
+            else:
+                self.dataset.record_win(1 - turn)
 
+        # Print final results
         if verbose or humans_playing:
             if turn < 0:
                 print("It's a draw!")

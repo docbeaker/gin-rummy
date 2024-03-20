@@ -1,6 +1,7 @@
 from numpy import where
+from typing import Tuple
 
-from gin_rummy.gameplay.game_manager import GameManager, BasePlayer, CardFormatter, NV
+from gin_rummy.gameplay.game_manager import BasePlayer, CardFormatter, NV
 
 
 class HumanPlayer(BasePlayer):
@@ -8,7 +9,7 @@ class HumanPlayer(BasePlayer):
     def requires_input(self):
         return True
 
-    def _choose_card_to_discard(self, discard_top: int) -> int:
+    def _choose_card_to_discard(self, discard_top: int) -> Tuple[int, float]:
         """
         State used by this player is just the top discard card
         """
@@ -20,7 +21,7 @@ class HumanPlayer(BasePlayer):
             while take not in {"y", "n"}:
                 take = input("Take discarded card? [y/n] ")
                 if take == "n":
-                    return discard_top
+                    return discard_top, 0.0
                 if take == "debug":
                     import pdb; pdb.set_trace()
 
@@ -50,5 +51,5 @@ class HumanPlayer(BasePlayer):
                 idx = None
                 continue
 
-        return idx
+        return idx, 0.0
 

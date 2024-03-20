@@ -51,7 +51,7 @@ def train_agent(
     player: RummyAgent,
     opponent_pool: Union[List[BasePlayer], BasePlayer],
     algorithm: str = RF,
-    ignore_critic: bool = False,
+    gael: float = 1,
     lr: float = 0.1,
     lr_warmup_steps: int = 0,
     k_epochs_per_step: int = 1,
@@ -114,16 +114,23 @@ def train_agent(
         )
         player.model.train()
         for _ in range(k_epochs_per_step):
-            for state, ostate, action, reward in dl:
+            for state, action, vt_plus_1, win in dl:
                 optimizer.zero_grad()
 
-                logp, logr = player.model(state, None if ignore_critic else ostate)
-                if ignore_critic:
-                    critic_loss = 0.0
+                logp, logvt = player.model(state)
+                critic_loss = critic_loss_function(logvt, win)
+                with torch.no_grad():
+                    vt = torch.exp(logvt)
+
+                if gael > 0.999:
+                    # TODO: add value network warmup steps?
+                    # Use full reward, high variance approach
+                    reward = win - vt
+                elif gael < 0.001:
+                    # Use predicted reward, high bias approach (biased by value network)
+                    reward = vt_plus_1 - vt
                 else:
-                    critic_loss = critic_loss_function(logr, reward)
-                    with torch.no_grad():
-                        reward = reward - torch.exp(logr)
+                    raise NotImplementedError("intermediate values of GAE-lambda not supported")
 
                 if scale_minibatch:
                     reward = (reward - reward.mean()) / (reward.std() + 1E-8)
