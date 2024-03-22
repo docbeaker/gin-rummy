@@ -193,7 +193,8 @@ class GameManager:
         discard_top = self.discard_pile[-1]
         player.accept_card(self.discard_pile.pop())
 
-        state = discard_top if player.requires_input else player.hand_matrix.copy() # placeholder for more complicated state
+        # placeholder for more complicated state
+        state = discard_top if player.requires_input else player.hand_matrix.copy()
         discard_card, gin, pwin = player.discard_card(state)
         if idx == 0 and self.dataset is not None:
             self.dataset.record_state(state, discard_card, pwin)

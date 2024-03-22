@@ -59,6 +59,7 @@ def train_agent(
     minibatch_size: int = 0,
     epsilon: float = 0.2,
     output: Path = None,
+    log_steps: int = 1,
     always_save_checkpoint: bool = False,
     num_workers: int = 4,
 ) -> BasePlayer:
@@ -81,21 +82,22 @@ def train_agent(
     best_win_rate = 0.0
     for t in range(n_steps + 1):
         st = time()
-        n_wins, n_played, dataset = run_playouts(n_games, player, opponent_pool)
+        n_wins, n_played, dataset = run_playouts(n_games, player, opponent_pool, progress_bar=log_steps == 1)
         if not n_played:
             print(f"Step {t} failed to generate any valid games!")
             continue
-        print(
-            f"Step {t}: agent win percentage = {100 * n_wins / n_played: .1f}% "
-            f"({n_played} valid games)"
-        )
+        if (t % log_steps == 0) or (t == n_steps):
+            print(
+                f"Step {t}: agent win percentage = {100 * n_wins / n_played: .1f}% "
+                f"({n_played} valid games)"
+            )
 
         # Check if we should be saving a model
         wr = n_wins / n_played
         win_rates.append(wr)
         if output and t and ((wr > best_win_rate) or always_save_checkpoint):
             save_checkpoint(Path(output, "ckpt.pt"), player.model, optimizer, win_rates=win_rates)
-            print("Model checkpoint saved!")
+            print(f"Model checkpoint saved at step {t}!")
         best_win_rate = max(wr, best_win_rate)
 
         if t == n_steps:
@@ -154,7 +156,8 @@ def train_agent(
         if ref_model is not None:
             ref_model.load_state_dict(player.model.state_dict())
 
-        print(f"Step completed in {time() - st:.2f}s")
+        if t % log_steps == 0:
+            print(f"Step completed in {time() - st:.2f}s")
 
     if output:
         save_checkpoint(

@@ -20,6 +20,7 @@ from gin_rummy.rl.policy_networks import __all__ as pno, default as default_poli
 @click.option("--minibatch-size", type=int, default=0)
 @click.option("--k-epochs", type=int, default=1)
 @click.option("--epsilon", type=float, default=0.2)
+@click.option("--log-steps", type=int, default=1)
 @click.option("--workers", type=int, default=4)
 def main(
     output: Path,
@@ -34,6 +35,7 @@ def main(
     minibatch_size: int = 0,
     k_epochs: int = 1,
     epsilon: float = 0.2,
+    log_steps: int = 1,
     workers: int = 4
 ):
     agent = RummyAgent(network=policy)
@@ -53,6 +55,7 @@ def main(
         k_epochs_per_step=k_epochs,
         epsilon=epsilon,
         output=output,
+        log_steps=log_steps,
         always_save_checkpoint=False,
         num_workers=workers
     )
