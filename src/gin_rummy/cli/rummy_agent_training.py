@@ -2,16 +2,17 @@ import click
 
 from pathlib import Path
 
-from gin_rummy.rl.training import train_agent, RF
+from gin_rummy.rl.training import train_agent, RF, PPO
 from gin_rummy.players import CardPointPlayer, RummyAgent
+from gin_rummy.rl.policy_networks import __all__ as pno, default as default_policy
 
 
 @click.command()
-@click.argument("network", type=str)
 @click.argument("output", type=Path)
+@click.option("--policy", type=click.Choice(pno), default=default_policy)
 @click.option("--games", type=int, required=True)
 @click.option("--steps", type=int, required=True)
-@click.option("--algorithm", type=str, default=RF)
+@click.option("--algorithm", type=click.Choice([RF, PPO]), default=RF)
 @click.option("--gael", type=float, default=1.0)
 @click.option("--lr", type=float, default=0.1)
 @click.option("--lr-warmup-steps", type=int, default=0)
@@ -21,8 +22,8 @@ from gin_rummy.players import CardPointPlayer, RummyAgent
 @click.option("--epsilon", type=float, default=0.2)
 @click.option("--workers", type=int, default=4)
 def main(
-    network: str,
     output: Path,
+    policy: str = default_policy,
     games: int = 500,
     steps: int = 10,
     algorithm: str = RF,
@@ -35,7 +36,7 @@ def main(
     epsilon: float = 0.2,
     workers: int = 4
 ):
-    agent = RummyAgent(network=network)
+    agent = RummyAgent(network=policy)
     opponent_pool = CardPointPlayer()
 
     agent = train_agent(
