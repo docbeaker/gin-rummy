@@ -11,15 +11,20 @@ class GameplayDataset(Dataset):
         self.v_next = []
         self.win_label = []
 
-    def record_state(self, state: ArrayLike, action: int, v_next: float):
+    def record_state(self, state: ArrayLike, action: int, pwin: float):
         # Shift the recorded values by one so each state is associated with
         # the value prediction for the next state (effectively, throw away first)
         if len(self.v_next) == len(self.actions) - 1:
-            self.v_next.append(v_next)
+            self.v_next.append(pwin)
         self.state.append(Tensor(state))
         self.actions.append(action)
 
     def record_win(self, label: float):
+        # Weird edge case: suppose opponent is dealt winning hand, and gets to go first
+        # Then, no states/actions have been recorded for that game for the player,
+        # so there are no states with which to associate the win label.
+        if len(self.win_label) == len(self.state):
+            return
         # This is effectively discounted reward from the end state, with discount factor gamma = 1
         while len(self.win_label) < len(self.state):
             self.win_label.append(float(label))
