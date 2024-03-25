@@ -10,7 +10,8 @@ from gin_rummy.rl.recorder import GameplayDataset
 def run_playouts(
     n_games: int,
     player: BasePlayer,
-    opponent_pool: Union[List[BasePlayer], BasePlayer]
+    opponent_pool: Union[List[BasePlayer], BasePlayer],
+    progress_bar: bool = True,
 ) -> Tuple[int, int, GameplayDataset]:
     player_wins, valid_games = 0, 0
     gm = GameManager(record=True)
@@ -22,7 +23,10 @@ def run_playouts(
             p.model.eval()
 
     starting_turn = choice([0, 1])
-    for _ in tqdm(range(n_games)):
+    _game_generator = range(n_games)
+    if progress_bar:
+        _game_generator = tqdm(_game_generator)
+    for _ in _game_generator:
         opponent = choice(opponent_pool)
 
         winner = gm.play_game(

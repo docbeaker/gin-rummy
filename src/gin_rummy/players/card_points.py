@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.signal import convolve2d
+from typing import Tuple
+from numpy.typing import ArrayLike
 
 from ..gameplay.game_manager import BasePlayer
 
@@ -12,16 +14,16 @@ class CardPointPlayer(BasePlayer):
         self.points_kernel[:, 3] = 1.5
         self.points_kernel[3] = [0, 1, 2, 1, 2, 1, 0]
 
-    def _choose_card_to_discard(self, discard_top: int) -> int:
+    def _choose_card_to_discard(self, state: ArrayLike) -> Tuple[int, float]:
         """
         Run convolution, and then use argmin to return index in flattened array
 
         Does not use discard top
         """
         hand_pts = convolve2d(
-            self.hand_matrix,
+            state,
             self.points_kernel,
             mode="same"
         )
         hand_pts = hand_pts + (1 - self.hand_matrix) * 10 * hand_pts.max()
-        return hand_pts.argmin()
+        return int(hand_pts.argmin()), 0.0
